@@ -1,0 +1,64 @@
+<yandex>
+  <!-- ===== Storage locations (all under your base dir) ===== -->
+  <path>/tmp/xiaolong/runtime/data/</path>
+  <tmp_path>/tmp/xiaolong/runtime/tmp/</tmp_path>
+  <user_files_path>/tmp/xiaolong/runtime/user_files/</user_files_path>
+
+  <!-- ===== Networking (local only) ===== -->
+  <listen_host>127.0.0.1</listen_host>
+  <tcp_port>9000</tcp_port>     <!-- native client/benchmark -->
+  <http_port>8123</http_port>   <!-- optional HTTP API -->
+
+<prometheus>
+    <endpoint>/metrics</endpoint>
+    <port>9363</port>
+    <metrics>true</metrics>
+    <events>true</events>
+    <asynchronous_metrics>true</asynchronous_metrics>
+    <errors>true</errors>
+</prometheus>
+
+  <!-- ===== Logging ===== -->
+  <logger>
+    <level>information</level>
+    <log>/tmp/xiaolong/runtime/logs/server.log</log>
+    <errorlog>/tmp/xiaolong/runtime/logs/error.log</errorlog>
+    <size>100M</size>
+    <count>10</count>
+  </logger>
+
+  <!-- ===== Query logging (for benchmark stats) ===== -->
+  <query_log>
+    <database>system</database>
+    <table>query_log</table>
+    <flush_interval_milliseconds>5000</flush_interval_milliseconds>
+  </query_log>
+
+  <!-- Optional, nice to have: per-thread rows -->
+  <query_thread_log>
+    <database>system</database>
+    <table>query_thread_log</table>
+    <flush_interval_milliseconds>5000</flush_interval_milliseconds>
+  </query_thread_log>
+
+  <!-- ===== Simple local auth ===== -->
+  <users>
+    <default>
+      <password></password>
+      <profile>default</profile>
+      <quota>default</quota>
+      <networks>
+        <ip>127.0.0.1</ip>
+        <ip>::1</ip>
+      </networks>
+    </default>
+  </users>
+
+  <profiles>
+    <default/>
+  </profiles>
+
+  <quotas>
+    <default/>
+  </quotas>
+</yandex>

@@ -1,0 +1,10 @@
+<!-- This file was generated automatically.
+     Do not edit it: it is likely to be discarded and generated again before it's read next time.
+     Files used to generate this file:
+       /Users/xiaolonghuang/Desktop/ClickHouse/config.xml      -->
+
+<query_log>
+    <database>system</database>
+    <table>query_log</table>
+    <flush_interval_milliseconds>5000</flush_interval_milliseconds>
+  </query_log>

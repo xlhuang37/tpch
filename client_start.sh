@@ -1,1 +1,1 @@
-../ClickHouse/build/programs/clickhouse-client
+../ClickHouse/build-debug/programs/clickhouse-client

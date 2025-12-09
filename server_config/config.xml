@@ -1,7 +1,7 @@
 <yandex>
   <!-- ===== Storage locations (all under your base dir) ===== -->
   <path>/work/users/x/i/xiaolong/runtime/data/</path>
-  <tmp_path>/work/users/x/i/xiaolong/runtime/work/users/x/i/</work/users/x/i_path>
+  <tmp_path>/work/users/x/i/xiaolong/runtime/tmp/</tmp_path>
   <user_files_path>/work/users/x/i/xiaolong/runtime/user_files/</user_files_path>
 
   <!-- ===== Networking (local only) ===== -->

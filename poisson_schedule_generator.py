@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# python3 poisson_schedule_generator.py --length 300 --lam1 0.02 --lam2 0.04
+# python3 poisson_schedule_generator.py --length 30 --lam1 0.02 --lam2 0.04
 
 import argparse
 import csv
@@ -12,7 +12,6 @@ class Event:
     qid: str
 
 def gen_poisson_events(rate_qps: float, length: float, qid: str, rng: random.Random):
-    """Generate (time in seconds) arrivals from a Poisson process with rate_qps."""
     t = 0.0
     out = []
     if rate_qps <= 0:

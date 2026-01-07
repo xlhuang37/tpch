@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+from typing import Sequence, Optional, Tuple
 import argparse
 import asyncio
 import csv
@@ -8,6 +10,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 import aiohttp
+import matplotlib.pyplot as plt
 
 
 @dataclass
@@ -15,6 +18,47 @@ class Event:
     at_ms: int
     qid: str
 
+def array_to_bar_chart(
+    values: Sequence[float],
+    labels: Optional[Sequence[str]] = None,
+    *,
+    title: Optional[str] = None,
+    xlabel: Optional[str] = None,
+    ylabel: Optional[str] = None,
+    show: bool = True,
+    ax: Optional[plt.Axes] = None,
+) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot `values` as a bar chart. Returns (fig, ax).
+    """
+    if values is None:
+        raise ValueError("values is None")
+    n = len(values)
+    if n == 0:
+        raise ValueError("values is empty")
+
+    if labels is not None and len(labels) != n:
+        raise ValueError(f"labels length ({len(labels)}) != values length ({n})")
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    x = range(n)
+    ax.bar(x, values)
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(labels if labels is not None else [str(i) for i in x])
+
+    if title: ax.set_title(title)
+    if xlabel: ax.set_xlabel(xlabel)
+    if ylabel: ax.set_ylabel(ylabel)
+
+    fig.tight_layout()
+    if show:
+        plt.show()
+
+    return fig, ax
 
 def read_schedule_csv(path: str) -> List[Event]:
     events: List[Event] = []
@@ -65,6 +109,7 @@ async def send_one(
     t0_ns: int,
     spin_ns: int,
     sem: asyncio.Semaphore,
+    latency_ms_dict: dict,
 ) -> None:
     target_ns = t0_ns + event.at_ms * 1_000_000
     await wait_until_ns(target_ns, spin_ns)
@@ -81,6 +126,7 @@ async def send_one(
                 body = await resp.read()
                 req_end_ns = time.perf_counter_ns()
                 latency_ms = (req_end_ns - req_start_ns) / 1e6
+                latency_ms_dict[event.qid].append(latency_ms)
 
                 if resp.status != 200:
                     snippet = body[:200].decode("utf-8", errors="replace")
@@ -95,7 +141,6 @@ async def send_one(
             latency_ms = (req_end_ns - req_start_ns) / 1e6
             print(f"[{event.at_ms:>6} ms] {event.qid}: ERROR {e} "
                   f"lat={latency_ms:.2f}ms sched_err={sched_error_ms:.2f}ms")
-
 
 async def main():
     ap = argparse.ArgumentParser(description="Replay ClickHouse HTTP workload by timestamp (ms).")
@@ -113,9 +158,13 @@ async def main():
 
     # Preload SQL bytes for each qid (so send path is lightweight)
     sql_cache = {}
+    latency_ms_dict= {}
+    qid_list = []
     for e in events:
         if e.qid not in sql_cache:
+            latency_ms_dict[e.qid] = []
             sql_cache[e.qid] = load_query(args.queries_dir, e.qid)
+            qid_list.append(e.qid)
 
     connector = aiohttp.TCPConnector(limit=args.max_concurrency, ttl_dns_cache=300)
     timeout = aiohttp.ClientTimeout(total=None)  # let queries run; adjust if desired
@@ -134,11 +183,16 @@ async def main():
                     t0_ns=t0_ns,
                     spin_ns=spin_ns,
                     sem=sem,
+                    latency_ms_dict=latency_ms_dict,
                 )
             )
             for e in events
         ]
         await asyncio.gather(*tasks)
+
+    for qid in qid_list:
+        print("Class 1 Query Averege Latency: ", sum(latency_ms_dict[qid]) / 1000 / latency_ms_dict[qid].count, " seconds")
+        array_to_bar_chart(sorted(latency_ms_dict[qid]))
 
 
 if __name__ == "__main__":

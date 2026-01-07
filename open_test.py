@@ -192,9 +192,8 @@ async def main():
         await asyncio.gather(*tasks)
 
     for qid in qid_list:
-        print("Class 1 Query Averege Latency: ", sum(latency_ms_dict[qid]) / 1000 / latency_ms_dict[qid].count, " seconds")
+        print("Class 1 Query Averege Latency: ", sum(latency_ms_dict[qid]) / 1000 / latency_ms_dict[qid].count(), " seconds")
         array_to_bar_chart(sorted(latency_ms_dict[qid]))
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+#python3 open_test.py --schedule=./schedules/test.csv
 from __future__ import annotations
 from typing import Sequence, Optional, Tuple
 import argparse

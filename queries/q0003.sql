@@ -26,7 +26,7 @@ CROSS JOIN
 (
     SELECT number
     FROM system.numbers
-    LIMIT 64          -- bump this factor up/down to control length
+    LIMIT 4
 ) AS dup
 GROUP BY
     l_returnflag,

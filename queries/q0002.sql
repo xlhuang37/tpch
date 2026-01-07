@@ -17,7 +17,6 @@ FROM
         ) AS running_charge
     FROM lineitem
     WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY
-        AND (cityHash64(l_orderkey) % 5) = 0
 ) AS t
 GROUP BY
     l_returnflag,

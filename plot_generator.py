@@ -3,14 +3,23 @@
 Standalone script to generate timeline plots from raw CSV output files.
 
 Usage:
-    python3 plot_generator.py path/to/schedule_raw.csv
-    python3 plot_generator.py path/to/schedule_raw.csv --output my_plot.png
-    python3 plot_generator.py path/to/schedule_raw.csv --show
+    # Generate plots for all raw CSVs in all folders under ./output
+    python3 plot_generator.py
+
+    # Generate plots for a specific output folder
+    python3 plot_generator.py --output-dir ./output/20260108_143022
+
+    # Generate plot for a single CSV file
+    python3 plot_generator.py --csv path/to/schedule_raw.csv
+
+    # Show plot interactively (single CSV mode only)
+    python3 plot_generator.py --csv path/to/schedule_raw.csv --show
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import glob
 import os
 from dataclasses import dataclass
 from typing import List, Dict
@@ -114,7 +123,7 @@ def generate_timeline_plot(
     # Save if output path provided
     if output_path:
         fig.savefig(output_path, dpi=150, bbox_inches="tight")
-        print(f"Plot saved to: {output_path}")
+        print(f"  Saved: {output_path}")
     
     # Show if requested
     if show:
@@ -123,67 +132,147 @@ def generate_timeline_plot(
         plt.close(fig)
 
 
-def main():
-    ap = argparse.ArgumentParser(
-        description="Generate timeline plots from raw CSV output files."
-    )
-    ap.add_argument("csv_file", help="Path to the raw CSV file (e.g., schedule_raw.csv)")
-    ap.add_argument("--output", "-o", help="Output path for the plot image (default: <csv_basename>_timeline.png)")
-    ap.add_argument("--show", action="store_true", help="Display the plot interactively")
-    ap.add_argument("--title", help="Custom title for the plot")
-    args = ap.parse_args()
-    
-    if not os.path.exists(args.csv_file):
-        print(f"Error: File not found: {args.csv_file}")
-        return
-    
+def process_csv_file(csv_path: str, show: bool = False) -> None:
+    """Process a single CSV file and generate its plot."""
     # Read the CSV
-    records, qid_list = read_raw_csv(args.csv_file)
-    print(f"Loaded {len(records)} records with {len(qid_list)} query type(s): {', '.join(qid_list)}")
+    records, qid_list = read_raw_csv(csv_path)
     
     # Determine output path
-    if args.output:
-        output_path = args.output
+    if csv_path.endswith("_raw.csv"):
+        output_path = csv_path[:-8] + "_timeline.png"
+    elif csv_path.endswith(".csv"):
+        output_path = csv_path[:-4] + "_timeline.png"
     else:
-        # Default: replace _raw.csv with _timeline.png or append _timeline.png
-        base = args.csv_file
-        if base.endswith("_raw.csv"):
-            output_path = base[:-8] + "_timeline.png"
-        elif base.endswith(".csv"):
-            output_path = base[:-4] + "_timeline.png"
-        else:
-            output_path = base + "_timeline.png"
+        output_path = csv_path + "_timeline.png"
     
     # Determine title
-    if args.title:
-        title = args.title
+    basename = os.path.basename(csv_path)
+    if basename.endswith("_raw.csv"):
+        schedule_name = basename[:-8]
+    elif basename.endswith(".csv"):
+        schedule_name = basename[:-4]
     else:
-        # Extract schedule name from filename
-        basename = os.path.basename(args.csv_file)
-        if basename.endswith("_raw.csv"):
-            schedule_name = basename[:-8]
-        elif basename.endswith(".csv"):
-            schedule_name = basename[:-4]
-        else:
-            schedule_name = basename
-        title = f"Query Timeline: {schedule_name}"
+        schedule_name = basename
+    title = f"Query Timeline: {schedule_name}"
     
     # Generate the plot
     generate_timeline_plot(
         records=records,
         qid_list=qid_list,
         title=title,
-        output_path=output_path if not args.show or args.output else None,
-        show=args.show,
+        output_path=output_path if not show else None,
+        show=show,
     )
+
+
+def process_output_folder(folder_path: str) -> int:
+    """Process all *_raw.csv files in a folder. Returns count of files processed."""
+    csv_pattern = os.path.join(folder_path, "*_raw.csv")
+    csv_files = sorted(glob.glob(csv_pattern))
     
-    # If show was requested but no explicit output, still save by default
-    if args.show and not args.output:
-        # Don't save if only showing
-        pass
-    elif not args.show:
-        # Already saved above
-        pass
+    if not csv_files:
+        return 0
+    
+    print(f"\nProcessing folder: {folder_path}")
+    for csv_path in csv_files:
+        print(f"  Processing: {os.path.basename(csv_path)}")
+        try:
+            process_csv_file(csv_path)
+        except Exception as e:
+            print(f"    Error: {e}")
+    
+    return len(csv_files)
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Generate timeline plots from raw CSV output files."
+    )
+    ap.add_argument("--csv", help="Path to a single raw CSV file to process")
+    ap.add_argument("--output-dir", help="Process a specific output folder")
+    ap.add_argument("--base-dir", default="./output", 
+                    help="Base directory containing output folders (default: ./output)")
+    ap.add_argument("--show", action="store_true", 
+                    help="Display plot interactively (only works with --csv)")
+    ap.add_argument("--title", help="Custom title for the plot (only works with --csv)")
+    args = ap.parse_args()
+    
+    # Mode 1: Single CSV file
+    if args.csv:
+        if not os.path.exists(args.csv):
+            print(f"Error: File not found: {args.csv}")
+            return
+        
+        records, qid_list = read_raw_csv(args.csv)
+        print(f"Loaded {len(records)} records with {len(qid_list)} query type(s): {', '.join(qid_list)}")
+        
+        # Determine output path
+        if args.csv.endswith("_raw.csv"):
+            output_path = args.csv[:-8] + "_timeline.png"
+        elif args.csv.endswith(".csv"):
+            output_path = args.csv[:-4] + "_timeline.png"
+        else:
+            output_path = args.csv + "_timeline.png"
+        
+        # Determine title
+        if args.title:
+            title = args.title
+        else:
+            basename = os.path.basename(args.csv)
+            if basename.endswith("_raw.csv"):
+                schedule_name = basename[:-8]
+            elif basename.endswith(".csv"):
+                schedule_name = basename[:-4]
+            else:
+                schedule_name = basename
+            title = f"Query Timeline: {schedule_name}"
+        
+        generate_timeline_plot(
+            records=records,
+            qid_list=qid_list,
+            title=title,
+            output_path=output_path if not args.show else None,
+            show=args.show,
+        )
+        if not args.show:
+            print(f"Plot saved to: {output_path}")
+        return
+    
+    # Mode 2: Specific output folder
+    if args.output_dir:
+        if not os.path.isdir(args.output_dir):
+            print(f"Error: Directory not found: {args.output_dir}")
+            return
+        
+        count = process_output_folder(args.output_dir)
+        print(f"\nProcessed {count} CSV file(s) in {args.output_dir}")
+        return
+    
+    # Mode 3: All folders under base directory
+    if not os.path.isdir(args.base_dir):
+        print(f"Error: Base directory not found: {args.base_dir}")
+        return
+    
+    # Find all subdirectories in base_dir
+    subdirs = sorted([
+        os.path.join(args.base_dir, d) 
+        for d in os.listdir(args.base_dir) 
+        if os.path.isdir(os.path.join(args.base_dir, d))
+    ])
+    
+    if not subdirs:
+        print(f"No output folders found in {args.base_dir}")
+        return
+    
+    print(f"Found {len(subdirs)} output folder(s) in {args.base_dir}")
+    
+    total_count = 0
+    for folder in subdirs:
+        count = process_output_folder(folder)
+        total_count += count
+    
+    print(f"\n{'='*60}")
+    print(f"Done! Generated {total_count} plot(s) across {len(subdirs)} folder(s)")
 
 
 if __name__ == "__main__":

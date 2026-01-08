@@ -34,47 +34,61 @@ class ScheduleConfig:
 # Define all schedules to generate
 SCHEDULES: List[ScheduleConfig] = [
     # Load Config
-    ScheduleConfig(load=128, ratio=1.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=64, ratio=1.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=32, ratio=1.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=128, ratio=1.0, length=120, query_type="default", p_size=1200, np_size=300),
-    ScheduleConfig(load=64, ratio=1.0, length=120, query_type="default", p_size=1200, np_size=300),
-    ScheduleConfig(load=32, ratio=1.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=1.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=1.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=1.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=1.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=1.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=1.0, length=120, query_type="default", p_size=1200, np_size=300),
     # 
-    ScheduleConfig(load=128, ratio=1.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=64, ratio=1.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=32, ratio=1.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=128, ratio=1.0, length=120, query_type="default", p_size=2400, np_size=300),
-    ScheduleConfig(load=64, ratio=1.0, length=120, query_type="default", p_size=2400, np_size=300),
-    ScheduleConfig(load=32, ratio=1.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=1.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=1.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=1.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=1.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=1.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=1.0, length=120, query_type="default", p_size=2400, np_size=300),
     # Load Config
-    ScheduleConfig(load=128, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=64, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=32, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=128, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
-    ScheduleConfig(load=64, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
-    ScheduleConfig(load=32, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
     # 
-    ScheduleConfig(load=128, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=64, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=32, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=128, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
-    ScheduleConfig(load=64, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
-    ScheduleConfig(load=32, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
     # Load Config
-    ScheduleConfig(load=128, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=64, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=32, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    ScheduleConfig(load=128, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
-    ScheduleConfig(load=64, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
-    ScheduleConfig(load=32, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
     # 
-    ScheduleConfig(load=128, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=64, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=32, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    ScheduleConfig(load=128, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
-    ScheduleConfig(load=64, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
-    ScheduleConfig(load=32, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
+    # Load Config
+    ScheduleConfig(load=36, ratio=0.5, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=0.5, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=0.5, length=120, query_type="greedy", p_size=1200, np_size=300),
+    ScheduleConfig(load=36, ratio=0.5, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=24, ratio=0.5, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=12, ratio=0.5, length=120, query_type="default", p_size=1200, np_size=300),
+    # 
+    ScheduleConfig(load=36, ratio=0.5, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=0.5, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=0.5, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=0.5, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=24, ratio=0.5, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=12, ratio=0.5, length=120, query_type="default", p_size=2400, np_size=300),
 ]
 
 # Directory containing query SQL files
@@ -127,7 +141,7 @@ def compute_arrival_rates(total_load: float, ratio: float, cpu1: int, cpu2: int)
     return lam1, lam2
 
 
-def generate_schedule(config: ScheduleConfig, query_cpu_seconds: dict[str, int]) -> bool:
+def generate_schedule(config: ScheduleConfig, query_cpu_seconds: dict[str, int], index: int) -> bool:
     """Generate a single schedule. Returns True on success."""
     # Build query IDs
     qid_np = f"np_{config.query_type}_{config.np_size}"
@@ -160,7 +174,8 @@ def generate_schedule(config: ScheduleConfig, query_cpu_seconds: dict[str, int])
     print(f"  P:  {qid_p} @ {lam_p:.6f} QPS (load: {lam_p * cpu_p:.4f})")
     print(f"  Total load: {lam_np * cpu_np + lam_p * cpu_p:.4f}")
 
-    # Build command
+    # Build command with prefix for ordering (e.g., "001_", "002_", etc.)
+    prefix = f"{index:03d}_"
     cmd = [
         sys.executable, "poisson_schedule_generator.py",
         "--qid1", qid_np,
@@ -169,6 +184,7 @@ def generate_schedule(config: ScheduleConfig, query_cpu_seconds: dict[str, int])
         "--lam2", str(lam_p),
         "--length", str(config.length),
         "--seed", str(config.seed),
+        "--prefix", prefix,
     ]
 
     result = subprocess.run(cmd, cwd=".")
@@ -203,7 +219,7 @@ def main():
               f"length={config.length}s, type={config.query_type}, p_size={config.p_size}")
         print("-" * 50)
         
-        if generate_schedule(config, query_cpu_seconds):
+        if generate_schedule(config, query_cpu_seconds, index=i):
             success_count += 1
         else:
             fail_count += 1

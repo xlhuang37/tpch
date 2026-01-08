@@ -34,14 +34,15 @@ def main():
     ap.add_argument("--seed", type=int, default=123, help="RNG seed")
     ap.add_argument("--rounding", choices=["floor", "round"], default="round",
                     help="How to convert seconds to milliseconds")
+    ap.add_argument("--prefix", default="", help="Prefix for output filename (e.g., '001_')")
     args = ap.parse_args()
 
     # Generate output filename from parameters
-    # Format: qid1_qid2_lam{lam1}_{lam2}_len{length}_s{seed}_{rounding}.csv
+    # Format: [prefix]qid1_qid2_lam{lam1}_{lam2}_len{length}_s{seed}_{rounding}.csv
     lam1_str = f"{args.lam1:.6f}".rstrip('0').rstrip('.')
     lam2_str = f"{args.lam2:.6f}".rstrip('0').rstrip('.')
     length_str = f"{args.length:.6f}".rstrip('0').rstrip('.')
-    out_filename = f"{args.qid1}_{args.qid2}_lam{lam1_str}_{lam2_str}_len{length_str}_s{args.seed}_{args.rounding}.csv"
+    out_filename = f"{args.prefix}{args.qid1}_{args.qid2}_lam{lam1_str}_{lam2_str}_len{length_str}_s{args.seed}_{args.rounding}.csv"
     outdir = "./schedules/" + out_filename
 
     rng = random.Random(args.seed)

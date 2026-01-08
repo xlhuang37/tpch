@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-#python3 open_test.py --schedule=./schedules/test.csv
+#python3 open_test.py --schedules ./schedules/test1.csv ./schedules/test2.csv
 from __future__ import annotations
 from typing import Sequence, Optional, Tuple
 import argparse
@@ -8,7 +8,8 @@ import csv
 import os
 import time
 from dataclasses import dataclass
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Dict
 
 import aiohttp
 import matplotlib.pyplot as plt
@@ -18,6 +19,94 @@ import matplotlib.pyplot as plt
 class Event:
     at_ms: int
     qid: str
+
+
+@dataclass
+class LatencyRecord:
+    at_ms: int
+    latency_ms: float
+    qid: str
+
+
+def compute_percentile(sorted_values: List[float], p: float) -> float:
+    """Compute the p-th percentile of sorted values (p in 0-100)."""
+    if not sorted_values:
+        return 0.0
+    n = len(sorted_values)
+    idx = (p / 100.0) * (n - 1)
+    lower = int(idx)
+    upper = min(lower + 1, n - 1)
+    weight = idx - lower
+    return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
+
+
+def save_raw_data(output_dir: str, schedule_name: str, records: List[LatencyRecord]) -> str:
+    """Save raw data (at_ms, latency_ms, qid) sorted by at_ms to a CSV file."""
+    sorted_records = sorted(records, key=lambda r: (r.at_ms, r.qid))
+    filename = f"{schedule_name}_raw.csv"
+    filepath = os.path.join(output_dir, filename)
+    
+    with open(filepath, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["at_ms", "latency_ms", "qid"])
+        for r in sorted_records:
+            w.writerow([r.at_ms, f"{r.latency_ms:.4f}", r.qid])
+    
+    return filepath
+
+
+def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRecord], qid_list: List[str]) -> str:
+    """Save statistics (average, percentiles) to a text file."""
+    filename = f"{schedule_name}_stats.txt"
+    filepath = os.path.join(output_dir, filename)
+    
+    # Group records by qid
+    by_qid: Dict[str, List[float]] = {qid: [] for qid in qid_list}
+    all_latencies: List[float] = []
+    
+    for r in records:
+        by_qid[r.qid].append(r.latency_ms)
+        all_latencies.append(r.latency_ms)
+    
+    with open(filepath, "w") as f:
+        f.write(f"Statistics for schedule: {schedule_name}\n")
+        f.write(f"Total queries: {len(records)}\n")
+        f.write("=" * 60 + "\n\n")
+        
+        # Overall statistics
+        if all_latencies:
+            sorted_all = sorted(all_latencies)
+            f.write("OVERALL STATISTICS\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"  Count:    {len(sorted_all)}\n")
+            f.write(f"  Average:  {sum(sorted_all) / len(sorted_all):.4f} ms\n")
+            f.write(f"  Min:      {sorted_all[0]:.4f} ms\n")
+            f.write(f"  Max:      {sorted_all[-1]:.4f} ms\n")
+            f.write(f"  P50:      {compute_percentile(sorted_all, 50):.4f} ms\n")
+            f.write(f"  P90:      {compute_percentile(sorted_all, 90):.4f} ms\n")
+            f.write(f"  P95:      {compute_percentile(sorted_all, 95):.4f} ms\n")
+            f.write(f"  P99:      {compute_percentile(sorted_all, 99):.4f} ms\n")
+            f.write("\n")
+        
+        # Per-qid statistics
+        f.write("PER-QUERY STATISTICS\n")
+        f.write("-" * 40 + "\n")
+        for qid in qid_list:
+            latencies = by_qid[qid]
+            if latencies:
+                sorted_lat = sorted(latencies)
+                f.write(f"\n  {qid}:\n")
+                f.write(f"    Count:    {len(sorted_lat)}\n")
+                f.write(f"    Average:  {sum(sorted_lat) / len(sorted_lat):.4f} ms\n")
+                f.write(f"    Min:      {sorted_lat[0]:.4f} ms\n")
+                f.write(f"    Max:      {sorted_lat[-1]:.4f} ms\n")
+                f.write(f"    P50:      {compute_percentile(sorted_lat, 50):.4f} ms\n")
+                f.write(f"    P90:      {compute_percentile(sorted_lat, 90):.4f} ms\n")
+                f.write(f"    P95:      {compute_percentile(sorted_lat, 95):.4f} ms\n")
+                f.write(f"    P99:      {compute_percentile(sorted_lat, 99):.4f} ms\n")
+    
+    return filepath
+
 
 def array_to_bar_chart(
     values: Sequence[float],
@@ -60,6 +149,7 @@ def array_to_bar_chart(
         plt.show()
 
     return fig, ax
+
 
 def read_schedule_csv(path: str) -> List[Event]:
     events: List[Event] = []
@@ -110,7 +200,8 @@ async def send_one(
     t0_ns: int,
     spin_ns: int,
     sem: asyncio.Semaphore,
-    latency_ms_dict: dict,
+    latency_records: List[LatencyRecord],
+    records_lock: asyncio.Lock,
 ) -> None:
     target_ns = t0_ns + event.at_ms * 1_000_000
     await wait_until_ns(target_ns, spin_ns)
@@ -127,7 +218,9 @@ async def send_one(
                 body = await resp.read()
                 req_end_ns = time.perf_counter_ns()
                 latency_ms = (req_end_ns - req_start_ns) / 1e6
-                latency_ms_dict[event.qid].append(latency_ms)
+                
+                async with records_lock:
+                    latency_records.append(LatencyRecord(at_ms=event.at_ms, latency_ms=latency_ms, qid=event.qid))
 
                 if resp.status != 200:
                     snippet = body[:200].decode("utf-8", errors="replace")
@@ -143,34 +236,37 @@ async def send_one(
             print(f"[{event.at_ms:>6} ms] {event.qid}: ERROR {e} "
                   f"lat={latency_ms:.2f}ms sched_err={sched_error_ms:.2f}ms")
 
-async def main():
-    ap = argparse.ArgumentParser(description="Replay ClickHouse HTTP workload by timestamp (ms).")
-    ap.add_argument("--schedule", required=True, help="Path to schedule CSV (columns: at_ms,qid)")
-    ap.add_argument("--queries-dir", default="./queries/", help="Directory containing <qid>.sql files")
-    ap.add_argument("--url", default="http://localhost:8123/", help="ClickHouse HTTP endpoint URL")
 
-    ap.add_argument("--max-concurrency", type=int, default=50,
-                    help="Max in-flight HTTP requests from the client")
-    ap.add_argument("--spin-ns", type=int, default=100000,
-                    help="Final busy-wait window for timing accuracy (microseconds)")
-    args = ap.parse_args()
-
-    events = read_schedule_csv(args.schedule)
+async def run_schedule(
+    schedule_path: str,
+    queries_dir: str,
+    url: str,
+    max_concurrency: int,
+    spin_ns: int,
+    output_dir: str,
+) -> None:
+    """Run a single schedule and save results."""
+    schedule_name = os.path.splitext(os.path.basename(schedule_path))[0]
+    print(f"\n{'='*60}")
+    print(f"Running schedule: {schedule_path}")
+    print(f"{'='*60}\n")
+    
+    events = read_schedule_csv(schedule_path)
 
     # Preload SQL bytes for each qid (so send path is lightweight)
     sql_cache = {}
-    latency_ms_dict= {}
     qid_list = []
     for e in events:
         if e.qid not in sql_cache:
-            latency_ms_dict[e.qid] = []
-            sql_cache[e.qid] = load_query(args.queries_dir, e.qid)
+            sql_cache[e.qid] = load_query(queries_dir, e.qid)
             qid_list.append(e.qid)
 
-    connector = aiohttp.TCPConnector(limit=args.max_concurrency, ttl_dns_cache=300)
+    connector = aiohttp.TCPConnector(limit=max_concurrency, ttl_dns_cache=300)
     timeout = aiohttp.ClientTimeout(total=None)  # let queries run; adjust if desired
-    sem = asyncio.Semaphore(args.max_concurrency)
-    spin_ns = args.spin_ns
+    sem = asyncio.Semaphore(max_concurrency)
+    
+    latency_records: List[LatencyRecord] = []
+    records_lock = asyncio.Lock()
 
     t0_ns = time.perf_counter_ns()
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
@@ -178,22 +274,68 @@ async def main():
             asyncio.create_task(
                 send_one(
                     session=session,
-                    url=args.url,
+                    url=url,
                     event=e,
                     sql_bytes=sql_cache[e.qid],
                     t0_ns=t0_ns,
                     spin_ns=spin_ns,
                     sem=sem,
-                    latency_ms_dict=latency_ms_dict,
+                    latency_records=latency_records,
+                    records_lock=records_lock,
                 )
             )
             for e in events
         ]
         await asyncio.gather(*tasks)
 
-    for qid in qid_list:
-        print("Class 1 Query Averege Latency: ", sum(latency_ms_dict[qid]) / 1000 / latency_ms_dict[qid].count(), " seconds")
-        array_to_bar_chart(sorted(latency_ms_dict[qid]))
+    # Save results
+    raw_path = save_raw_data(output_dir, schedule_name, latency_records)
+    stats_path = save_statistics(output_dir, schedule_name, latency_records, qid_list)
+    
+    print(f"\nSchedule '{schedule_name}' completed.")
+    print(f"  Raw data saved to: {raw_path}")
+    print(f"  Statistics saved to: {stats_path}")
+    
+    # Print summary to console
+    if latency_records:
+        all_latencies = [r.latency_ms for r in latency_records]
+        avg_latency = sum(all_latencies) / len(all_latencies)
+        print(f"  Average latency: {avg_latency:.2f} ms")
+
+
+async def main():
+    ap = argparse.ArgumentParser(description="Replay ClickHouse HTTP workload by timestamp (ms).")
+    ap.add_argument("--schedules", nargs='+', required=True, 
+                    help="Paths to schedule CSV files (columns: at_ms,qid)")
+    ap.add_argument("--queries-dir", default="./queries/", help="Directory containing <qid>.sql files")
+    ap.add_argument("--url", default="http://localhost:8123/", help="ClickHouse HTTP endpoint URL")
+    ap.add_argument("--max-concurrency", type=int, default=50,
+                    help="Max in-flight HTTP requests from the client")
+    ap.add_argument("--spin-ns", type=int, default=100000,
+                    help="Final busy-wait window for timing accuracy (microseconds)")
+    args = ap.parse_args()
+
+    # Create output directory with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = os.path.join("./output", timestamp)
+    os.makedirs(output_dir, exist_ok=True)
+    print(f"Output directory: {output_dir}")
+
+    # Run each schedule sequentially
+    for schedule_path in args.schedules:
+        await run_schedule(
+            schedule_path=schedule_path,
+            queries_dir=args.queries_dir,
+            url=args.url,
+            max_concurrency=args.max_concurrency,
+            spin_ns=args.spin_ns,
+            output_dir=output_dir,
+        )
+
+    print(f"\n{'='*60}")
+    print(f"All schedules completed. Results in: {output_dir}")
+    print(f"{'='*60}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

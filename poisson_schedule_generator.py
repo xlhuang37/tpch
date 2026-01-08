@@ -25,7 +25,7 @@ def gen_poisson_events(rate_qps: float, length: float, qid: str, rng: random.Ran
 
 def main():
     ap = argparse.ArgumentParser(description="Generate sorted ClickHouse schedule.csv (at_ms,qid) for two Poisson classes.")
-    ap.add_argument("--out", default="default.csv", help="Output CSV path")
+    # Remove the --out argument line
     ap.add_argument("--length", type=float, required=True, help="Total duration to generate (seconds)")
     ap.add_argument("--lam1", type=float, required=True, help="Class 1 rate (QPS)")
     ap.add_argument("--lam2", type=float, required=True, help="Class 2 rate (QPS)")
@@ -36,9 +36,16 @@ def main():
                     help="How to convert seconds to milliseconds")
     args = ap.parse_args()
 
-    outdir = "./schedules/" + args.out
+    # Generate output filename from parameters
+    # Format: qid1_qid2_lam{lam1}_{lam2}_len{length}_s{seed}_{rounding}.csv
+    lam1_str = f"{args.lam1:.6f}".rstrip('0').rstrip('.')
+    lam2_str = f"{args.lam2:.6f}".rstrip('0').rstrip('.')
+    length_str = f"{args.length:.6f}".rstrip('0').rstrip('.')
+    out_filename = f"{args.qid1}_{args.qid2}_lam{lam1_str}_{lam2_str}_len{length_str}_s{args.seed}_{args.rounding}.csv"
+    outdir = "./schedules/" + out_filename
 
     rng = random.Random(args.seed)
+
 
     events = []
     events += gen_poisson_events(args.lam1, args.length, args.qid1, rng)

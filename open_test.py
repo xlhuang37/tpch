@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-#python3 open_test.py --schedules ./schedules/test1.csv ./schedules/test2.csv
+#python3 open_test.py
 from __future__ import annotations
 from typing import Sequence, Optional, Tuple
 import argparse
 import asyncio
 import csv
+import glob
 import os
 import time
 from dataclasses import dataclass
@@ -305,8 +306,8 @@ async def run_schedule(
 
 async def main():
     ap = argparse.ArgumentParser(description="Replay ClickHouse HTTP workload by timestamp (ms).")
-    ap.add_argument("--schedules", nargs='+', required=True, 
-                    help="Paths to schedule CSV files (columns: at_ms,qid)")
+    ap.add_argument("--schedules-dir", default="./schedules/", 
+                    help="Directory containing schedule CSV files (default: ./schedules/)")
     ap.add_argument("--queries-dir", default="./queries/", help="Directory containing <qid>.sql files")
     ap.add_argument("--url", default="http://localhost:8123/", help="ClickHouse HTTP endpoint URL")
     ap.add_argument("--max-concurrency", type=int, default=50,
@@ -315,14 +316,26 @@ async def main():
                     help="Final busy-wait window for timing accuracy (microseconds)")
     args = ap.parse_args()
 
+    # Discover all CSV files in the schedules directory
+    schedule_pattern = os.path.join(args.schedules_dir, "*.csv")
+    schedule_paths = sorted(glob.glob(schedule_pattern))
+    
+    if not schedule_paths:
+        print(f"No schedule CSV files found in {args.schedules_dir}")
+        return
+    
+    print(f"Found {len(schedule_paths)} schedule(s) in {args.schedules_dir}:")
+    for p in schedule_paths:
+        print(f"  - {os.path.basename(p)}")
+
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_dir = os.path.join("./output", timestamp)
     os.makedirs(output_dir, exist_ok=True)
-    print(f"Output directory: {output_dir}")
+    print(f"\nOutput directory: {output_dir}")
 
     # Run each schedule sequentially
-    for schedule_path in args.schedules:
+    for schedule_path in schedule_paths:
         await run_schedule(
             schedule_path=schedule_path,
             queries_dir=args.queries_dir,

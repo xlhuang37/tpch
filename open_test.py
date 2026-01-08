@@ -14,6 +14,20 @@ from typing import List, Optional, Dict
 
 import aiohttp
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+
+
+# Color palette for different query IDs
+QUERY_COLORS = [
+    "#e63946",  # red
+    "#457b9d",  # blue
+    "#2a9d8f",  # teal
+    "#e9c46a",  # yellow
+    "#f4a261",  # orange
+    "#9b5de5",  # purple
+    "#00f5d4",  # cyan
+    "#f15bb5",  # pink
+]
 
 
 @dataclass
@@ -105,6 +119,64 @@ def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRe
                 f.write(f"    P90:      {compute_percentile(sorted_lat, 90):.4f} ms\n")
                 f.write(f"    P95:      {compute_percentile(sorted_lat, 95):.4f} ms\n")
                 f.write(f"    P99:      {compute_percentile(sorted_lat, 99):.4f} ms\n")
+    
+    return filepath
+
+
+def save_timeline_plot(
+    output_dir: str, 
+    schedule_name: str, 
+    records: List[LatencyRecord],
+    qid_list: List[str],
+) -> str:
+    """Generate and save a timeline plot showing query execution spans."""
+    if not records:
+        return ""
+    
+    # Sort records by arrival time
+    sorted_records = sorted(records, key=lambda r: (r.at_ms, r.qid))
+    
+    # Build color map for query IDs
+    color_map = {}
+    for i, qid in enumerate(qid_list):
+        color_map[qid] = QUERY_COLORS[i % len(QUERY_COLORS)]
+    
+    # Convert to seconds for display
+    starts = [r.at_ms / 1000.0 for r in sorted_records]
+    durations = [r.latency_ms / 1000.0 for r in sorted_records]
+    qids = [r.qid for r in sorted_records]
+    
+    # Create figure
+    fig_height = max(4, 0.25 * len(sorted_records))
+    fig, ax = plt.subplots(figsize=(12, fig_height))
+    
+    # Draw horizontal bars for each query
+    for i in range(len(sorted_records)):
+        color = color_map.get(qids[i], "#888888")
+        ax.hlines(y=i, xmin=starts[i], xmax=starts[i] + durations[i], 
+                  linewidth=6, colors=color)
+    
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Query instances (earliest arrival at top)")
+    ax.set_yticks([])
+    ax.invert_yaxis()
+    ax.grid(True, axis="x", linestyle="--", linewidth=0.6)
+    ax.set_title(f"Query Timeline: {schedule_name}")
+    
+    # Create legend
+    legend_items = [
+        Line2D([0], [0], color=color_map[qid], lw=6, label=qid)
+        for qid in qid_list
+    ]
+    ax.legend(handles=legend_items, loc="upper right")
+    
+    plt.tight_layout()
+    
+    # Save the plot
+    filename = f"{schedule_name}_timeline.png"
+    filepath = os.path.join(output_dir, filename)
+    fig.savefig(filepath, dpi=150, bbox_inches="tight")
+    plt.close(fig)
     
     return filepath
 
@@ -292,10 +364,12 @@ async def run_schedule(
     # Save results
     raw_path = save_raw_data(output_dir, schedule_name, latency_records)
     stats_path = save_statistics(output_dir, schedule_name, latency_records, qid_list)
+    plot_path = save_timeline_plot(output_dir, schedule_name, latency_records, qid_list)
     
     print(f"\nSchedule '{schedule_name}' completed.")
     print(f"  Raw data saved to: {raw_path}")
     print(f"  Statistics saved to: {stats_path}")
+    print(f"  Timeline plot saved to: {plot_path}")
     
     # Print summary to console
     if latency_records:

@@ -28,17 +28,10 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 
-# Color palette for different query IDs
-QUERY_COLORS = [
-    "#e63946",  # red
-    "#457b9d",  # blue
-    "#2a9d8f",  # teal
-    "#e9c46a",  # yellow
-    "#f4a261",  # orange
-    "#9b5de5",  # purple
-    "#00f5d4",  # cyan
-    "#f15bb5",  # pink
-]
+# Colors for query types
+COLOR_NP = "#e63946"  # red for np queries
+COLOR_P = "#457b9d"   # blue for p queries
+COLOR_DEFAULT = "#888888"  # gray for unknown
 
 
 @dataclass
@@ -84,10 +77,15 @@ def generate_timeline_plot(
     # Sort records by arrival time
     sorted_records = sorted(records, key=lambda r: (r.at_ms, r.qid))
     
-    # Build color map for query IDs
+    # Build color map for query IDs (np=red, p=blue)
     color_map: Dict[str, str] = {}
-    for i, qid in enumerate(qid_list):
-        color_map[qid] = QUERY_COLORS[i % len(QUERY_COLORS)]
+    for qid in qid_list:
+        if qid.startswith("np_"):
+            color_map[qid] = COLOR_NP
+        elif qid.startswith("p_"):
+            color_map[qid] = COLOR_P
+        else:
+            color_map[qid] = COLOR_DEFAULT
     
     # Convert to seconds for display
     starts = [r.at_ms / 1000.0 for r in sorted_records]

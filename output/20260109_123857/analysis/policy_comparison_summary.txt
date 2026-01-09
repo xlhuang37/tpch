@@ -1,0 +1,112 @@
+================================================================================
+POLICY COMPARISON SUMMARY: GREEDY vs DEFAULT
+================================================================================
+
+Total pairs analyzed: 6
+
+------------------------------------------------------------
+OVERALL LATENCY COMPARISON (ms)
+------------------------------------------------------------
+
+Average:
+  Greedy Avg:      34656.78 ms
+  Default Avg:     34478.00 ms
+  Diff:             +178.78 ms (+4.34%)
+  Default BETTER
+
+P50:
+  Greedy Avg:      33591.48 ms
+  Default Avg:     33019.00 ms
+  Diff:             +572.48 ms (+4.92%)
+  Default BETTER
+
+P90:
+  Greedy Avg:      48770.14 ms
+  Default Avg:     64521.79 ms
+  Diff:           -15751.65 ms (-12.03%)
+  Greedy BETTER
+
+P95:
+  Greedy Avg:      51126.08 ms
+  Default Avg:     68133.92 ms
+  Diff:           -17007.84 ms (-12.08%)
+  Greedy BETTER
+
+P99:
+  Greedy Avg:      54033.97 ms
+  Default Avg:     73903.38 ms
+  Diff:           -19869.41 ms (-11.18%)
+  Greedy BETTER
+
+------------------------------------------------------------
+PRIORITY vs NON-PRIORITY QUERY BREAKDOWN
+------------------------------------------------------------
+
+Priority Queries:
+  Greedy Avg:      36738.65 ms
+  Default Avg:     23783.54 ms
+  Diff:           +12955.11 ms (+55.19%)
+
+Non-Priority Queries:
+  Greedy Avg:      29979.53 ms
+  Default Avg:     45554.33 ms
+  Diff:           -15574.80 ms (-15.86%)
+
+------------------------------------------------------------
+PARAMETER IMPACT ANALYSIS
+------------------------------------------------------------
+
+By Total Lambda (Arrival Rate):
+  λ=0.0098+0.0195=0.0293: Avg Diff=+918.54 ms (P=-1172.12, NP=+5622.53)
+  λ=0.0364+0.0182=0.0545: Avg Diff=+3341.00 ms (P=+9178.53, NP=+1151.93)
+  λ=0.0195+0.0390=0.0585: Avg Diff=+99.40 ms (P=+21633.53, NP=-42968.87)
+  λ=0.0293+0.0585=0.0878: Avg Diff=-9830.12 ms (P=+17669.77, NP=-54829.94)
+  λ=0.0727+0.0364=0.1091: Avg Diff=+3459.56 ms (P=+9770.25, NP=+1517.80)
+  λ=0.1091+0.0545=0.1636: Avg Diff=+3084.29 ms (P=+20650.68, NP=-3942.27)
+
+------------------------------------------------------------
+DETAILED PAIR-BY-PAIR COMPARISON
+------------------------------------------------------------
+
+Pair 001 (greedy) vs 004 (default)
+  λ1=0.109091, λ2=0.054545
+  Greedy Avg: 37495.50 ms
+  Default Avg: 34411.22 ms
+  Diff: +3084.29 ms (+8.96%)
+  Winner: Default
+
+Pair 002 (greedy) vs 005 (default)
+  λ1=0.072727, λ2=0.036364
+  Greedy Avg: 28311.65 ms
+  Default Avg: 24852.10 ms
+  Diff: +3459.56 ms (+13.92%)
+  Winner: Default
+
+Pair 003 (greedy) vs 006 (default)
+  λ1=0.036364, λ2=0.018182
+  Greedy Avg: 28049.95 ms
+  Default Avg: 24708.95 ms
+  Diff: +3341.00 ms (+13.52%)
+  Winner: Default
+
+Pair 007 (greedy) vs 010 (default)
+  λ1=0.029268, λ2=0.058537
+  Greedy Avg: 49804.43 ms
+  Default Avg: 59634.55 ms
+  Diff: -9830.12 ms (-16.48%)
+  Winner: Greedy
+
+Pair 008 (greedy) vs 011 (default)
+  λ1=0.019512, λ2=0.039024
+  Greedy Avg: 47830.25 ms
+  Default Avg: 47730.85 ms
+  Diff: +99.40 ms (+0.21%)
+  Winner: Default
+
+Pair 009 (greedy) vs 012 (default)
+  λ1=0.009756, λ2=0.019512
+  Greedy Avg: 16448.87 ms
+  Default Avg: 15530.33 ms
+  Diff: +918.54 ms (+5.91%)
+  Winner: Default
+

@@ -16,7 +16,7 @@ FROM
             ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
         ) AS running_charge
     FROM lineitem
-    WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY
+    WHERE l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY 
 ) AS t
 GROUP BY
     l_returnflag,

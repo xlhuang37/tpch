@@ -87,168 +87,168 @@ DETAILED PAIR-BY-PAIR COMPARISON
 ------------------------------------------------------------
 
 Pair 001 (greedy) vs 004 (default)
-  λ1=0.024000, λ2=0.024000, period=300
+  λ1=0.024000, λ2=0.024000
   Greedy Avg: 184614.83 ms
   Default Avg: 155713.72 ms
   Diff: +28901.11 ms (+18.56%)
   Winner: Default
 
 Pair 002 (greedy) vs 005 (default)
-  λ1=0.016000, λ2=0.016000, period=300
+  λ1=0.016000, λ2=0.016000
   Greedy Avg: 187671.24 ms
   Default Avg: 150266.53 ms
   Diff: +37404.71 ms (+24.89%)
   Winner: Default
 
 Pair 003 (greedy) vs 006 (default)
-  λ1=0.008000, λ2=0.008000, period=300
+  λ1=0.008000, λ2=0.008000
   Greedy Avg: 175201.63 ms
   Default Avg: 144843.88 ms
   Diff: +30357.75 ms (+20.96%)
   Winner: Default
 
 Pair 007 (greedy) vs 010 (default)
-  λ1=0.013333, λ2=0.013333, period=300
+  λ1=0.013333, λ2=0.013333
   Greedy Avg: 272726.27 ms
   Default Avg: 161730.93 ms
   Diff: +110995.34 ms (+68.63%)
   Winner: Default
 
 Pair 008 (greedy) vs 011 (default)
-  λ1=0.008889, λ2=0.008889, period=300
+  λ1=0.008889, λ2=0.008889
   Greedy Avg: 219246.26 ms
   Default Avg: 159609.89 ms
   Diff: +59636.37 ms (+37.36%)
   Winner: Default
 
 Pair 009 (greedy) vs 012 (default)
-  λ1=0.004444, λ2=0.004444, period=300
+  λ1=0.004444, λ2=0.004444
   Greedy Avg: 235959.44 ms
   Default Avg: 146075.73 ms
   Diff: +89883.71 ms (+61.53%)
   Winner: Default
 
 Pair 013 (greedy) vs 016 (default)
-  λ1=0.040000, λ2=0.020000, period=300
+  λ1=0.040000, λ2=0.020000
   Greedy Avg: 372445.76 ms
   Default Avg: 228086.27 ms
   Diff: +144359.49 ms (+63.29%)
   Winner: Default
 
 Pair 014 (greedy) vs 017 (default)
-  λ1=0.026667, λ2=0.013333, period=300
+  λ1=0.026667, λ2=0.013333
   Greedy Avg: 231407.68 ms
   Default Avg: 156942.93 ms
   Diff: +74464.75 ms (+47.45%)
   Winner: Default
 
 Pair 015 (greedy) vs 018 (default)
-  λ1=0.013333, λ2=0.006667, period=300
+  λ1=0.013333, λ2=0.006667
   Greedy Avg: 249025.74 ms
   Default Avg: 142653.05 ms
   Diff: +106372.70 ms (+74.57%)
   Winner: Default
 
 Pair 019 (greedy) vs 022 (default)
-  λ1=0.024000, λ2=0.012000, period=300
+  λ1=0.024000, λ2=0.012000
   Greedy Avg: 377751.26 ms
   Default Avg: 238395.73 ms
   Diff: +139355.52 ms (+58.46%)
   Winner: Default
 
 Pair 020 (greedy) vs 023 (default)
-  λ1=0.016000, λ2=0.008000, period=300
+  λ1=0.016000, λ2=0.008000
   Greedy Avg: 276221.22 ms
   Default Avg: 163387.24 ms
   Diff: +112833.97 ms (+69.06%)
   Winner: Default
 
 Pair 021 (greedy) vs 024 (default)
-  λ1=0.008000, λ2=0.004000, period=300
+  λ1=0.008000, λ2=0.004000
   Greedy Avg: 269683.56 ms
   Default Avg: 152322.80 ms
   Diff: +117360.76 ms (+77.05%)
   Winner: Default
 
 Pair 025 (greedy) vs 028 (default)
-  λ1=0.060000, λ2=0.015000, period=300
+  λ1=0.060000, λ2=0.015000
   Greedy Avg: 339524.17 ms
   Default Avg: 143142.22 ms
   Diff: +196381.95 ms (+137.19%)
   Winner: Default
 
 Pair 026 (greedy) vs 029 (default)
-  λ1=0.040000, λ2=0.010000, period=300
+  λ1=0.040000, λ2=0.010000
   Greedy Avg: 265376.40 ms
   Default Avg: 119885.57 ms
   Diff: +145490.83 ms (+121.36%)
   Winner: Default
 
 Pair 027 (greedy) vs 030 (default)
-  λ1=0.020000, λ2=0.005000, period=300
+  λ1=0.020000, λ2=0.005000
   Greedy Avg: 235860.60 ms
   Default Avg: 126764.32 ms
   Diff: +109096.27 ms (+86.06%)
   Winner: Default
 
 Pair 031 (greedy) vs 034 (default)
-  λ1=0.040000, λ2=0.010000, period=300
+  λ1=0.040000, λ2=0.010000
   Greedy Avg: 256343.18 ms
   Default Avg: 397062.32 ms
   Diff: -140719.15 ms (-35.44%)
   Winner: Greedy
 
 Pair 032 (greedy) vs 035 (default)
-  λ1=0.026667, λ2=0.006667, period=300
+  λ1=0.026667, λ2=0.006667
   Greedy Avg: 231718.42 ms
   Default Avg: 454972.69 ms
   Diff: -223254.26 ms (-49.07%)
   Winner: Greedy
 
 Pair 033 (greedy) vs 036 (default)
-  λ1=0.013333, λ2=0.003333, period=300
+  λ1=0.013333, λ2=0.003333
   Greedy Avg: 260963.10 ms
   Default Avg: 264477.21 ms
   Diff: -3514.11 ms (-1.33%)
   Winner: Greedy
 
 Pair 037 (greedy) vs 040 (default)
-  λ1=0.013333, λ2=0.026667, period=300
+  λ1=0.013333, λ2=0.026667
   Greedy Avg: 190783.66 ms
   Default Avg: 195346.56 ms
   Diff: -4562.90 ms (-2.34%)
   Winner: Greedy
 
 Pair 038 (greedy) vs 041 (default)
-  λ1=0.008889, λ2=0.017778, period=300
+  λ1=0.008889, λ2=0.017778
   Greedy Avg: 201010.45 ms
   Default Avg: 250436.10 ms
   Diff: -49425.65 ms (-19.74%)
   Winner: Greedy
 
 Pair 039 (greedy) vs 042 (default)
-  λ1=0.004444, λ2=0.008889, period=300
+  λ1=0.004444, λ2=0.008889
   Greedy Avg: 226596.60 ms
   Default Avg: 145739.23 ms
   Diff: +80857.37 ms (+55.48%)
   Winner: Default
 
 Pair 043 (greedy) vs 046 (default)
-  λ1=0.007059, λ2=0.014118, period=300
+  λ1=0.007059, λ2=0.014118
   Greedy Avg: 316216.87 ms
   Default Avg: 518936.51 ms
   Diff: -202719.64 ms (-39.06%)
   Winner: Greedy
 
 Pair 044 (greedy) vs 047 (default)
-  λ1=0.004706, λ2=0.009412, period=300
+  λ1=0.004706, λ2=0.009412
   Greedy Avg: 296191.19 ms
   Default Avg: 207795.25 ms
   Diff: +88395.94 ms (+42.54%)
   Winner: Default
 
 Pair 045 (greedy) vs 048 (default)
-  λ1=0.002353, λ2=0.004706, period=300
+  λ1=0.002353, λ2=0.004706
   Greedy Avg: 268376.71 ms
   Default Avg: 189883.72 ms
   Diff: +78492.99 ms (+41.34%)

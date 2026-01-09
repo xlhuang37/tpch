@@ -27,7 +27,6 @@ class StatsData:
     filename: str
     prefix: int
     policy: str  # 'greedy' or 'default'
-    priority_period: int  # 1200 or 2400
     lambda1: float
     lambda2: float
     length: int
@@ -61,10 +60,6 @@ def parse_stats_file(filepath: str) -> Optional[StatsData]:
         policy = 'default'
     else:
         return None
-    
-    # Extract priority period (1200 or 2400)
-    period_match = re.search(r'p_(?:greedy|default)_(\d+)', filename)
-    priority_period = int(period_match.group(1)) if period_match else 0
     
     # Extract lambda values
     lambda_match = re.search(r'lam([\d.]+)_([\d.]+)', filename)
@@ -127,7 +122,6 @@ def parse_stats_file(filepath: str) -> Optional[StatsData]:
         filename=filename,
         prefix=prefix,
         policy=policy,
-        priority_period=priority_period,
         lambda1=lambda1,
         lambda2=lambda2,
         length=length,
@@ -152,8 +146,7 @@ def find_pairs(stats_list: List[StatsData]) -> List[Tuple[StatsData, StatsData]]
             if (abs(greedy_data.lambda1 - default_data.lambda1) < 0.0001 and
                 abs(greedy_data.lambda2 - default_data.lambda2) < 0.0001 and
                 greedy_data.length == default_data.length and
-                greedy_data.seed == default_data.seed and
-                greedy_data.priority_period == default_data.priority_period):
+                greedy_data.seed == default_data.seed):
                 pairs.append((greedy_data, default_data))
     
     return sorted(pairs, key=lambda x: x[0].prefix)
@@ -168,7 +161,6 @@ def compute_comparison_metrics(greedy: StatsData, default: StatsData) -> Dict:
         'lambda2': greedy.lambda2,
         'total_lambda': greedy.lambda1 + greedy.lambda2,
         'lambda_ratio': greedy.lambda1 / greedy.lambda2 if greedy.lambda2 > 0 else float('inf'),
-        'priority_period': greedy.priority_period,
         'length': greedy.length,
         'seed': greedy.seed,
     }
@@ -272,17 +264,6 @@ def generate_summary_report(df: pd.DataFrame, output_dir: str):
         f.write("PARAMETER IMPACT ANALYSIS\n")
         f.write("-" * 60 + "\n\n")
         
-        # Group by priority period
-        if 'priority_period' in df.columns and df['priority_period'].nunique() > 1:
-            f.write("By Priority Period:\n")
-            for period, group in df.groupby('priority_period'):
-                f.write(f"  Period {int(period)}:\n")
-                f.write(f"    Pairs: {len(group)}\n")
-                f.write(f"    Avg Latency Diff: {group['diff_Average'].mean():+.2f} ms\n")
-                f.write(f"    Priority Query Diff: {group['priority_diff'].mean():+.2f} ms\n")
-                f.write(f"    Non-Priority Query Diff: {group['nonpriority_diff'].mean():+.2f} ms\n")
-            f.write("\n")
-        
         # Lambda impact
         f.write("By Total Lambda (Arrival Rate):\n")
         df_sorted = df.sort_values('total_lambda')
@@ -299,7 +280,7 @@ def generate_summary_report(df: pd.DataFrame, output_dir: str):
         
         for _, row in df.iterrows():
             f.write(f"Pair {int(row['greedy_prefix']):03d} (greedy) vs {int(row['default_prefix']):03d} (default)\n")
-            f.write(f"  λ1={row['lambda1']:.6f}, λ2={row['lambda2']:.6f}, period={int(row['priority_period'])}\n")
+            f.write(f"  λ1={row['lambda1']:.6f}, λ2={row['lambda2']:.6f}\n")
             f.write(f"  Greedy Avg: {row['greedy_Average']:.2f} ms\n")
             f.write(f"  Default Avg: {row['default_Average']:.2f} ms\n")
             f.write(f"  Diff: {row['diff_Average']:+.2f} ms ({row['pct_diff_Average']:+.2f}%)\n")
@@ -359,14 +340,16 @@ def create_visualizations(df: pd.DataFrame, output_dir: str):
     
     # Plot 4: Lambda vs Latency Difference scatter
     ax = axes[1, 1]
+    # Filter out infinite lambda ratios for color mapping
+    finite_ratio = df['lambda_ratio'].replace([np.inf, -np.inf], np.nan)
     scatter = ax.scatter(df['total_lambda'], df['diff_Average'], 
-                        c=df['priority_period'], cmap='viridis', 
+                        c=finite_ratio, cmap='viridis', 
                         s=100, alpha=0.7, edgecolors='black')
     ax.axhline(y=0, color='red', linestyle='--', linewidth=1, label='Equal Performance')
     ax.set_xlabel('Total Lambda (λ1 + λ2)')
     ax.set_ylabel('Latency Difference (Greedy - Default) ms')
     ax.set_title('Impact of Arrival Rate on Policy Difference')
-    plt.colorbar(scatter, ax=ax, label='Priority Period')
+    plt.colorbar(scatter, ax=ax, label='Lambda Ratio (λ1/λ2)')
     ax.grid(True, alpha=0.3)
     ax.legend()
     
@@ -409,12 +392,12 @@ def create_visualizations(df: pd.DataFrame, output_dir: str):
         try:
             pivot = df_pivot.pivot_table(values='diff_Average', 
                                          index='lambda1_str', 
-                                         columns='priority_period', 
+                                         columns='lambda2_str', 
                                          aggfunc='mean')
             if pivot.size > 1:
                 sns.heatmap(pivot, annot=True, fmt='.1f', cmap='RdYlGn_r', 
                            center=0, ax=axes[0])
-                axes[0].set_title('Latency Diff by λ1 and Priority Period\n(+ve = Default Better)')
+                axes[0].set_title('Latency Diff by λ1 and λ2\n(+ve = Default Better)')
         except:
             axes[0].text(0.5, 0.5, 'Insufficient data variation\nfor heatmap', 
                         ha='center', va='center', transform=axes[0].transAxes)

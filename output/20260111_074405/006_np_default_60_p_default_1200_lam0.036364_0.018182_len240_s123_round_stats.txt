@@ -1,0 +1,37 @@
+Statistics for schedule: 006_np_default_60_p_default_1200_lam0.036364_0.018182_len240_s123_round
+Total queries: 22
+============================================================
+
+OVERALL STATISTICS
+----------------------------------------
+  Count:    22
+  Average:  36509.4631 ms
+  Min:      12399.5883 ms
+  Max:      60207.4732 ms
+  P50:      34288.3920 ms
+  P90:      58873.9571 ms
+  P95:      59967.3944 ms
+  P99:      60163.7365 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_default_60:
+    Count:    16
+    Average:  42077.6500 ms
+    Min:      27342.6409 ms
+    Max:      60207.4732 ms
+    P50:      38940.2238 ms
+    P90:      59681.1163 ms
+    P95:      60051.2706 ms
+    P99:      60176.2327 ms
+
+  p_default_1200:
+    Count:    6
+    Average:  21660.9645 ms
+    Min:      12399.5883 ms
+    Max:      33501.6293 ms
+    P50:      20756.0296 ms
+    P90:      31345.0181 ms
+    P95:      32423.3237 ms
+    P99:      33285.9682 ms

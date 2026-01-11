@@ -35,7 +35,7 @@ def read_query_file(filepath: str) -> str:
         return f.read().strip()
 
 
-def run_query_with_threads(host: str, port: int, query: str, max_threads: int, timeout: int = 300) -> float:
+def run_query_with_threads(host: str, port: int, query: str, max_threads: int) -> float:
     """
     Run a query with specified max_threads setting and return execution time in seconds.
     Uses ClickHouse HTTP interface.
@@ -47,7 +47,7 @@ def run_query_with_threads(host: str, port: int, query: str, max_threads: int, t
     start_time = time.perf_counter()
     try:
         req = urllib.request.Request(url, data=query.encode('utf-8'), method='POST')
-        with urllib.request.urlopen(req, timeout=timeout) as response:
+        with urllib.request.urlopen(req) as response:
             response.read()  # Consume the response
     except Exception as e:
         print(f"  Error running query with {max_threads} threads: {e}", file=sys.stderr)

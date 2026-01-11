@@ -15,7 +15,8 @@ import os
 import time
 import sys
 from typing import List, Tuple
-import clickhouse_connect
+import urllib.request
+import urllib.parse
 
 
 def read_query_file(filepath: str) -> str:
@@ -24,16 +25,20 @@ def read_query_file(filepath: str) -> str:
         return f.read().strip()
 
 
-def run_query_with_threads(client, query: str, max_threads: int, timeout: int = 300) -> float:
+def run_query_with_threads(host: str, port: int, query: str, max_threads: int, timeout: int = 300) -> float:
     """
     Run a query with specified max_threads setting and return execution time in seconds.
+    Uses ClickHouse HTTP interface.
     """
-    # Set max_threads for this query
-    settings = {'max_threads': max_threads}
+    # Build URL with max_threads setting
+    params = urllib.parse.urlencode({'max_threads': max_threads})
+    url = f"http://{host}:{port}/?{params}"
     
     start_time = time.perf_counter()
     try:
-        client.query(query, settings=settings)
+        req = urllib.request.Request(url, data=query.encode('utf-8'), method='POST')
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            response.read()  # Consume the response
     except Exception as e:
         print(f"  Error running query with {max_threads} threads: {e}", file=sys.stderr)
         return float('inf')
@@ -43,7 +48,8 @@ def run_query_with_threads(client, query: str, max_threads: int, timeout: int = 
 
 
 def measure_speedup(
-    client,
+    host: str,
+    port: int,
     query: str,
     max_threads: int,
     repeat: int,
@@ -65,7 +71,7 @@ def measure_speedup(
     if warmup > 0 and verbose:
         print(f"Running {warmup} warmup iteration(s)...")
         for _ in range(warmup):
-            run_query_with_threads(client, query, max_threads)
+            run_query_with_threads(host, port, query, max_threads)
     
     # Measure for each thread count
     for num_threads in range(1, max_threads + 1):
@@ -74,7 +80,7 @@ def measure_speedup(
             print(f"Testing with {num_threads} thread(s)...", end=" ", flush=True)
         
         for rep in range(repeat):
-            elapsed = run_query_with_threads(client, query, num_threads)
+            elapsed = run_query_with_threads(host, port, query, num_threads)
             times.append(elapsed)
             if verbose:
                 print(f"{elapsed:.3f}s", end=" ", flush=True)
@@ -132,29 +138,15 @@ def main():
     
     if verbose:
         print(f"Query: {query_name}")
+        print(f"ClickHouse: {args.host}:{args.port}")
         print(f"Max threads: {args.max_threads}")
         print(f"Repetitions per thread count: {args.repeat}")
         print(f"Warmup iterations: {args.warmup}")
         print("-" * 60)
     
-    # Connect to ClickHouse
-    try:
-        client = clickhouse_connect.get_client(
-            host=args.host,
-            port=args.port
-        )
-        if verbose:
-            print(f"Connected to ClickHouse at {args.host}:{args.port}")
-    except Exception as e:
-        print(f"Error connecting to ClickHouse: {e}", file=sys.stderr)
-        sys.exit(1)
-    
     # Run measurements
-    if verbose:
-        print("-" * 60)
-    
     speedups, avg_times, all_times = measure_speedup(
-        client, query, args.max_threads, args.repeat, args.warmup, verbose
+        args.host, args.port, query, args.max_threads, args.repeat, args.warmup, verbose
     )
     
     # Print results

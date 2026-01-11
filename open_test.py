@@ -296,7 +296,7 @@ async def send_one(
     latency_records: List[LatencyRecord],
     records_lock: asyncio.Lock,
     max_retries: int = 1000,
-    retry_delay_ms: float = 100,
+    retry_delay_ms: float = 10000,
 ) -> None:
     target_ns = t0_ns + event.at_ms * 1_000_000
     await wait_until_ns(target_ns, spin_ns)

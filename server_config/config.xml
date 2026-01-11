@@ -5,21 +5,12 @@
   <user_files_path>/work/users/x/i/xiaolong/runtime/user_files/</user_files_path>
 
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
-  <max_server_memory_usage_to_ram_ratio>0.75</max_server_memory_usage_to_ram_ratio>
+  <max_server_memory_usage_to_ram_ratio>0.8</max_server_memory_usage_to_ram_ratio>
 
   <!-- ===== Networking (local only) ===== -->
   <listen_host>127.0.0.1</listen_host>
   <tcp_port>9000</tcp_port>     <!-- native client/benchmark -->
   <http_port>8123</http_port>   <!-- optional HTTP API -->
-
-  <prometheus>
-    <endpoint>/metrics</endpoint>
-    <port>9363</port>
-    <metrics>true</metrics>
-    <events>true</events>
-    <asynchronous_metrics>true</asynchronous_metrics>
-    <errors>true</errors>
-  </prometheus>
 
   <!-- ===== Logging ===== -->
   <logger>
@@ -30,20 +21,34 @@
     <count>10</count>
   </logger>
 
-  <!-- ===== Query logging (for benchmark stats) ===== -->
-  <query_log>
-    <database>system</database>
-    <table>query_log</table>
-    <flush_interval_milliseconds>5000</flush_interval_milliseconds>
-  </query_log>
+    <metric_log>
+        <database>system</database>
+        <table>metric_log</table>
 
-  <!-- Optional, nice to have: per-thread rows -->
-  <query_thread_log>
-    <database>system</database>
-    <table>query_thread_log</table>
-    <flush_interval_milliseconds>5000</flush_interval_milliseconds>
-  </query_thread_log>
+        <!-- How often to flush buffered rows into the table -->
+        <flush_interval_milliseconds>10000</flush_interval_milliseconds>
 
+        <!-- How often to collect the metric/event snapshot -->
+        <collect_interval_milliseconds>1000</collect_interval_milliseconds>
+
+        <!-- Optional: keep the table bounded (recommended in long-running clusters) -->
+        <!-- <partition_by>toYYYYMM(event_date)</partition_by>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl> -->
+    </metric_log>
+
+    <query_metric_log>
+        <database>system</database>
+        <table>query_metric_log</table>
+
+        <flush_interval_milliseconds>10000</flush_interval_milliseconds>
+
+        <!-- Server-side default collection cadence (also used by query_metric_log_interval when it is negative) -->
+        <collect_interval_milliseconds>1000</collect_interval_milliseconds>
+
+        <!-- Optional: keep bounded -->
+        <!-- <partition_by>toYYYYMM(event_date)</partition_by>
+        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl> -->
+    </query_metric_log>
   <!-- ===== Simple local auth ===== -->
   <users>
     <default>

@@ -5,7 +5,7 @@
   <user_files_path>/work/users/x/i/xiaolong/runtime/user_files/</user_files_path>
 
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
-  <max_server_memory_usage>206158430208</max_server_memory_usage>
+  <max_server_memory_usage>309237645312</max_server_memory_usage>
   <max_concurrent_queries>8</max_concurrent_queries>
 
   <!-- ===== Networking (local only) ===== -->

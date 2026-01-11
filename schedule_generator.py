@@ -34,12 +34,8 @@ class ScheduleConfig:
 # Define all schedules to generate
 SCHEDULES: List[ScheduleConfig] = [
     # Load Config
-    ScheduleConfig(load=72, ratio=1.0, length=900, query_type="greedy", p_size=94, np_size=113),
-    ScheduleConfig(load=72, ratio=1.0, length=900, query_type="default", p_size=94, np_size=113),
-    ScheduleConfig(load=48, ratio=1.0, length=900, query_type="greedy", p_size=94, np_size=113),
-    ScheduleConfig(load=48, ratio=1.0, length=900, query_type="default", p_size=94, np_size=113),
-    ScheduleConfig(load=24, ratio=1.0, length=900, query_type="greedy", p_size=94, np_size=113),
-    ScheduleConfig(load=24, ratio=1.0, length=900, query_type="default", p_size=94, np_size=113),
+    ScheduleConfig(load=8, ratio=1.0, length=900, query_type="greedy", p_size=94, np_size=113),
+    ScheduleConfig(load=8, ratio=1.0, length=900, query_type="default", p_size=94, np_size=113),
     # # Load Config
     # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
     # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),

@@ -342,6 +342,7 @@ async def send_one(
                       f"(attempt {attempt+1}) - retrying...")
         
         # Wait before retry (outside sem to not block others)
+        print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
         await asyncio.sleep(retry_delay_ms / 1000.0)
     
     # Max retries exceeded - record as failed with last attempt times

@@ -6,7 +6,8 @@
 
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
   <max_server_memory_usage>206158430208</max_server_memory_usage>
-
+  <max_concurrent_queries_for_all_users>8</max_concurrent_queries_for_all_users>
+  
   <!-- ===== Networking (local only) ===== -->
   <listen_host>127.0.0.1</listen_host>
   <tcp_port>9000</tcp_port>     <!-- native client/benchmark -->

@@ -31,8 +31,10 @@ class Event:
 
 @dataclass
 class LatencyRecord:
-    at_ms: int
-    latency_ms: float
+    arrival_ms: float     # Actual arrival time (relative to t0)
+    start_ms: float       # Actual query start time (when server accepted)
+    end_ms: float         # Query completion time
+    latency_ms: float     # end_ms - start_ms (execution time)
     qid: str
 
 
@@ -49,16 +51,17 @@ def compute_percentile(sorted_values: List[float], p: float) -> float:
 
 
 def save_raw_data(output_dir: str, schedule_name: str, records: List[LatencyRecord]) -> str:
-    """Save raw data (at_ms, latency_ms, qid) sorted by at_ms to a CSV file."""
-    sorted_records = sorted(records, key=lambda r: (r.at_ms, r.qid))
+    """Save raw data (arrival_ms, start_ms, end_ms, latency_ms, qid) sorted by arrival_ms to a CSV file."""
+    sorted_records = sorted(records, key=lambda r: (r.arrival_ms, r.qid))
     filename = f"{schedule_name}_raw.csv"
     filepath = os.path.join(output_dir, filename)
     
     with open(filepath, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["at_ms", "latency_ms", "qid"])
+        w.writerow(["arrival_ms", "start_ms", "end_ms", "latency_ms", "qid"])
         for r in sorted_records:
-            w.writerow([r.at_ms, f"{r.latency_ms:.4f}", r.qid])
+            w.writerow([f"{r.arrival_ms:.4f}", f"{r.start_ms:.4f}", 
+                       f"{r.end_ms:.4f}", f"{r.latency_ms:.4f}", r.qid])
     
     return filepath
 
@@ -122,12 +125,18 @@ def save_timeline_plot(
     records: List[LatencyRecord],
     qid_list: List[str],
 ) -> str:
-    """Generate and save a timeline plot showing query execution spans."""
+    """Generate and save a timeline plot showing query execution spans.
+    
+    Shows:
+    - Dot: query arrival time
+    - Horizontal bar: actual execution (start_ms to end_ms)
+    - Dotted line: waiting time (arrival to start)
+    """
     if not records:
         return ""
     
     # Sort records by arrival time
-    sorted_records = sorted(records, key=lambda r: (r.at_ms, r.qid))
+    sorted_records = sorted(records, key=lambda r: (r.arrival_ms, r.qid))
     
     # Build color map for query IDs (np=red, p=blue)
     color_map = {}
@@ -140,32 +149,45 @@ def save_timeline_plot(
             color_map[qid] = COLOR_DEFAULT
     
     # Convert to seconds for display
-    starts = [r.at_ms / 1000.0 for r in sorted_records]
-    durations = [r.latency_ms / 1000.0 for r in sorted_records]
+    arrivals = [r.arrival_ms / 1000.0 for r in sorted_records]
+    starts = [r.start_ms / 1000.0 for r in sorted_records]
+    ends = [r.end_ms / 1000.0 for r in sorted_records]
     qids = [r.qid for r in sorted_records]
     
     # Create figure
     fig_height = max(4, 0.25 * len(sorted_records))
     fig, ax = plt.subplots(figsize=(12, fig_height))
     
-    # Draw horizontal bars for each query
+    # Draw for each query
     for i in range(len(sorted_records)):
-        color = color_map.get(qids[i], "#888888")
-        ax.hlines(y=i, xmin=starts[i], xmax=starts[i] + durations[i], 
-                  linewidth=6, colors=color)
+        color = color_map.get(qids[i], COLOR_DEFAULT)
+        
+        # Dot at arrival time
+        ax.scatter(arrivals[i], i, color=color, s=20, zorder=3, marker='o')
+        
+        # Horizontal bar from actual start to end time
+        ax.hlines(y=i, xmin=starts[i], xmax=ends[i], linewidth=6, colors=color, zorder=2)
+        
+        # Dotted line connecting arrival dot to start of execution bar (waiting time)
+        if starts[i] > arrivals[i]:
+            ax.hlines(y=i, xmin=arrivals[i], xmax=starts[i], 
+                     linewidth=1, colors=color, linestyles='dotted', alpha=0.5, zorder=1)
     
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Query instances (earliest arrival at top)")
     ax.set_yticks([])
     ax.invert_yaxis()
     ax.grid(True, axis="x", linestyle="--", linewidth=0.6)
-    ax.set_title(f"Query Timeline: {schedule_name}")
+    ax.set_title(f"Query Timeline: {schedule_name}\n(dot=arrival, bar=execution)")
     
     # Create legend
     legend_items = [
         Line2D([0], [0], color=color_map[qid], lw=6, label=qid)
         for qid in qid_list
     ]
+    # Add legend item for arrival dot
+    legend_items.append(Line2D([0], [0], marker='o', color='gray', linestyle='None', 
+                               markersize=6, label='Arrival time'))
     ax.legend(handles=legend_items, loc="upper right")
     
     plt.tight_layout()
@@ -273,39 +295,59 @@ async def send_one(
     sem: asyncio.Semaphore,
     latency_records: List[LatencyRecord],
     records_lock: asyncio.Lock,
+    max_retries: int = 1000,
+    retry_delay_ms: float = 100,
 ) -> None:
     target_ns = t0_ns + event.at_ms * 1_000_000
     await wait_until_ns(target_ns, spin_ns)
 
-    scheduled_ns = target_ns
-    actual_send_start_ns = time.perf_counter_ns()
-    sched_error_ms = (actual_send_start_ns - scheduled_ns) / 1e6
+    # Record actual arrival time (relative to t0)
+    arrival_ns = time.perf_counter_ns()
+    arrival_ms = (arrival_ns - t0_ns) / 1e6
 
-    async with sem:
-        req_start_ns = time.perf_counter_ns()
-        try:
-            async with session.post(url, data=sql_bytes) as resp:
-                # If query returns rows, reading response fully avoids connection pool issues.
-                body = await resp.read()
-                req_end_ns = time.perf_counter_ns()
-                latency_ms = (req_end_ns - req_start_ns) / 1e6
-                
-                async with records_lock:
-                    latency_records.append(LatencyRecord(at_ms=event.at_ms, latency_ms=latency_ms, qid=event.qid))
+    for attempt in range(max_retries):
+        async with sem:
+            req_start_ns = time.perf_counter_ns()
+            start_ms = (req_start_ns - t0_ns) / 1e6
+            
+            try:
+                async with session.post(url, data=sql_bytes) as resp:
+                    body = await resp.read()
+                    req_end_ns = time.perf_counter_ns()
+                    end_ms = (req_end_ns - t0_ns) / 1e6
+                    latency_ms = (req_end_ns - req_start_ns) / 1e6
 
-                if resp.status != 200:
-                    snippet = body[:200].decode("utf-8", errors="replace")
-                    print(f"[{event.at_ms:>6} ms] {event.qid}: HTTP {resp.status} "
-                          f"lat={latency_ms:.2f}ms sched_err={sched_error_ms:.2f}ms "
-                          f"resp='{snippet}'")
-                else:
-                    print(f"[{event.at_ms:>6} ms] {event.qid}: OK "
-                          f"lat={latency_ms:.2f}ms sched_err={sched_error_ms:.2f}ms")
-        except Exception as e:
-            req_end_ns = time.perf_counter_ns()
-            latency_ms = (req_end_ns - req_start_ns) / 1e6
-            print(f"[{event.at_ms:>6} ms] {event.qid}: ERROR {e} "
-                  f"lat={latency_ms:.2f}ms sched_err={sched_error_ms:.2f}ms")
+                    if resp.status == 200:
+                        # Success - record and return
+                        async with records_lock:
+                            latency_records.append(LatencyRecord(
+                                arrival_ms=arrival_ms,
+                                start_ms=start_ms,
+                                end_ms=end_ms,
+                                latency_ms=latency_ms,
+                                qid=event.qid
+                            ))
+                        wait_ms = start_ms - arrival_ms
+                        print(f"[{event.at_ms:>6} ms] {event.qid}: OK "
+                              f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms")
+                        return
+                    else:
+                        # Server rejected (e.g., overloaded) - retry
+                        snippet = body[:200].decode("utf-8", errors="replace")
+                        print(f"[{event.at_ms:>6} ms] {event.qid}: HTTP {resp.status} "
+                              f"(attempt {attempt+1}) - retrying... resp='{snippet}'")
+                        
+            except Exception as e:
+                print(f"[{event.at_ms:>6} ms] {event.qid}: ERROR {e} "
+                      f"(attempt {attempt+1}) - retrying...")
+        
+        # Wait before retry (outside sem to not block others)
+        await asyncio.sleep(retry_delay_ms / 1000.0)
+    
+    # Max retries exceeded - record as failed with last attempt times
+    req_end_ns = time.perf_counter_ns()
+    end_ms = (req_end_ns - t0_ns) / 1e6
+    print(f"[{event.at_ms:>6} ms] {event.qid}: FAILED after {max_retries} attempts")
 
 
 async def run_schedule(

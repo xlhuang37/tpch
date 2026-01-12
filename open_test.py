@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #python3 open_test.py
 from __future__ import annotations
-from typing import Sequence, Optional, Tuple
+from typing import Optional
 import argparse
 import asyncio
 import csv
@@ -13,14 +13,6 @@ from datetime import datetime
 from typing import List, Optional, Dict
 
 import aiohttp
-import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-
-
-# Colors for query types
-COLOR_NP = "#e63946"  # red for np queries
-COLOR_P = "#457b9d"   # blue for p queries
-COLOR_DEFAULT = "#888888"  # gray for unknown
 
 
 @dataclass
@@ -117,131 +109,6 @@ def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRe
                 f.write(f"    P99:      {compute_percentile(sorted_lat, 99):.4f} ms\n")
     
     return filepath
-
-
-def save_timeline_plot(
-    output_dir: str, 
-    schedule_name: str, 
-    records: List[LatencyRecord],
-    qid_list: List[str],
-) -> str:
-    """Generate and save a timeline plot showing query execution spans.
-    
-    Shows:
-    - Dot: query arrival time
-    - Horizontal bar: actual execution (start_ms to end_ms)
-    - Dotted line: waiting time (arrival to start)
-    """
-    if not records:
-        return ""
-    
-    # Sort records by arrival time
-    sorted_records = sorted(records, key=lambda r: (r.arrival_ms, r.qid))
-    
-    # Build color map for query IDs (np=red, p=blue)
-    color_map = {}
-    for qid in qid_list:
-        if qid.startswith("np_"):
-            color_map[qid] = COLOR_NP
-        elif qid.startswith("p_"):
-            color_map[qid] = COLOR_P
-        else:
-            color_map[qid] = COLOR_DEFAULT
-    
-    # Convert to seconds for display
-    arrivals = [r.arrival_ms / 1000.0 for r in sorted_records]
-    starts = [r.start_ms / 1000.0 for r in sorted_records]
-    ends = [r.end_ms / 1000.0 for r in sorted_records]
-    qids = [r.qid for r in sorted_records]
-    
-    # Create figure
-    fig_height = max(4, 0.25 * len(sorted_records))
-    fig, ax = plt.subplots(figsize=(12, fig_height))
-    
-    # Draw for each query
-    for i in range(len(sorted_records)):
-        color = color_map.get(qids[i], COLOR_DEFAULT)
-        
-        # Dot at arrival time
-        ax.scatter(arrivals[i], i, color=color, s=20, zorder=3, marker='o')
-        
-        # Horizontal bar from actual start to end time
-        ax.hlines(y=i, xmin=starts[i], xmax=ends[i], linewidth=6, colors=color, zorder=2)
-        
-        # Dotted line connecting arrival dot to start of execution bar (waiting time)
-        if starts[i] > arrivals[i]:
-            ax.hlines(y=i, xmin=arrivals[i], xmax=starts[i], 
-                     linewidth=1, colors=color, linestyles='dotted', alpha=0.5, zorder=1)
-    
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Query instances (earliest arrival at top)")
-    ax.set_yticks([])
-    ax.invert_yaxis()
-    ax.grid(True, axis="x", linestyle="--", linewidth=0.6)
-    ax.set_title(f"Query Timeline: {schedule_name}\n(dot=arrival, bar=execution)")
-    
-    # Create legend
-    legend_items = [
-        Line2D([0], [0], color=color_map[qid], lw=6, label=qid)
-        for qid in qid_list
-    ]
-    # Add legend item for arrival dot
-    legend_items.append(Line2D([0], [0], marker='o', color='gray', linestyle='None', 
-                               markersize=6, label='Arrival time'))
-    ax.legend(handles=legend_items, loc="upper right")
-    
-    plt.tight_layout()
-    
-    # Save the plot
-    filename = f"{schedule_name}_timeline.png"
-    filepath = os.path.join(output_dir, filename)
-    fig.savefig(filepath, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    
-    return filepath
-
-
-def array_to_bar_chart(
-    values: Sequence[float],
-    labels: Optional[Sequence[str]] = None,
-    *,
-    title: Optional[str] = None,
-    xlabel: Optional[str] = None,
-    ylabel: Optional[str] = None,
-    show: bool = True,
-    ax: Optional[plt.Axes] = None,
-) -> Tuple[plt.Figure, plt.Axes]:
-    """
-    Plot `values` as a bar chart. Returns (fig, ax).
-    """
-    if values is None:
-        raise ValueError("values is None")
-    n = len(values)
-    if n == 0:
-        raise ValueError("values is empty")
-
-    if labels is not None and len(labels) != n:
-        raise ValueError(f"labels length ({len(labels)}) != values length ({n})")
-
-    if ax is None:
-        fig, ax = plt.subplots()
-    else:
-        fig = ax.figure
-
-    x = range(n)
-    ax.bar(x, values)
-    ax.set_xticks(list(x))
-    ax.set_xticklabels(labels if labels is not None else [str(i) for i in x])
-
-    if title: ax.set_title(title)
-    if xlabel: ax.set_xlabel(xlabel)
-    if ylabel: ax.set_ylabel(ylabel)
-
-    fig.tight_layout()
-    if show:
-        plt.show()
-
-    return fig, ax
 
 
 def read_schedule_csv(path: str) -> List[Event]:
@@ -405,12 +272,10 @@ async def run_schedule(
     # Save results
     raw_path = save_raw_data(output_dir, schedule_name, latency_records)
     stats_path = save_statistics(output_dir, schedule_name, latency_records, qid_list)
-    plot_path = save_timeline_plot(output_dir, schedule_name, latency_records, qid_list)
     
     print(f"\nSchedule '{schedule_name}' completed.")
     print(f"  Raw data saved to: {raw_path}")
     print(f"  Statistics saved to: {stats_path}")
-    print(f"  Timeline plot saved to: {plot_path}")
     
     # Print summary to console
     if latency_records:

@@ -37,19 +37,18 @@
         <ttl>event_date + INTERVAL 30 DAY DELETE</ttl> -->
     </metric_log>
 
+
     <query_metric_log>
         <database>system</database>
         <table>query_metric_log</table>
-
-        <flush_interval_milliseconds>10000</flush_interval_milliseconds>
-
-        <!-- Server-side default collection cadence (also used by query_metric_log_interval when it is negative) -->
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
         <collect_interval_milliseconds>1000</collect_interval_milliseconds>
-
-        <!-- Optional: keep bounded -->
-        <!-- <partition_by>toYYYYMM(event_date)</partition_by>
-        <ttl>event_date + INTERVAL 30 DAY DELETE</ttl> -->
+        <max_size_rows>1048576</max_size_rows>
+        <reserved_size_rows>8192</reserved_size_rows>
+        <buffer_size_rows_flush_threshold>524288</buffer_size_rows_flush_threshold>
+        <flush_on_crash>false</flush_on_crash>
     </query_metric_log>
+
   <!-- ===== Simple local auth ===== -->
   <users>
     <default>

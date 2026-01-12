@@ -6,7 +6,7 @@
 
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
   <max_server_memory_usage>309237645312</max_server_memory_usage>
-  <max_concurrent_queries>8</max_concurrent_queries>
+  <!-- <max_concurrent_queries>8</max_concurrent_queries> -->
 
   <!-- ===== Networking (local only) ===== -->
   <listen_host>127.0.0.1</listen_host>

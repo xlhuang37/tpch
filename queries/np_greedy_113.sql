@@ -23,4 +23,5 @@ GROUP BY
 ORDER BY
     revenue DESC
 SETTINGS
+    max_threads=4,
 	workload='SpeedUpTwo';

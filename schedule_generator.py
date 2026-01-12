@@ -33,16 +33,13 @@ class ScheduleConfig:
 
 # Define all schedules to generate
 SCHEDULES: List[ScheduleConfig] = [
-    # Load Config
-    ScheduleConfig(load=8, ratio=0.25, length=900, query_type="greedy", p_size=94, np_size=113),
-    ScheduleConfig(load=8, ratio=0.25, length=900, query_type="default", p_size=94, np_size=113),
     # # Load Config
-    # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=12, ratio=2.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
-    # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
-    # ScheduleConfig(load=12, ratio=2.0, length=120, query_type="default", p_size=1200, np_size=300),
+    ScheduleConfig(load=60, ratio=1.0, length=1200, query_type="greedy", p_size=330, np_size=87),
+    ScheduleConfig(load=40, ratio=1.0, length=1200, query_type="greedy", p_size=330, np_size=87),
+    ScheduleConfig(load=20, ratio=1.0, length=1200, query_type="greedy", p_size=330, np_size=87),
+    ScheduleConfig(load=40, ratio=1.0, length=1200, query_type="default", p_size=330, np_size=87),
+    ScheduleConfig(load=40, ratio=1.0, length=1200, query_type="default", p_size=330, np_size=87),
+    ScheduleConfig(load=20, ratio=1.0, length=1200, query_type="default", p_size=330, np_size=87),
     # # 
     # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
     # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),

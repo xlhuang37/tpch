@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import List, Optional, Dict
 
 import aiohttp
+import io
+import urllib.request
 
 
 @dataclass
@@ -107,6 +109,105 @@ def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRe
                 f.write(f"    P90:      {compute_percentile(sorted_lat, 90):.4f} ms\n")
                 f.write(f"    P95:      {compute_percentile(sorted_lat, 95):.4f} ms\n")
                 f.write(f"    P99:      {compute_percentile(sorted_lat, 99):.4f} ms\n")
+    
+    return filepath
+
+
+def query_system_events(url: str) -> List[List[str]]:
+    """
+    Query system.events from ClickHouse and return parsed CSV rows.
+    Each row is [event_name, value, description].
+    """
+    # Extract host:port from URL for urllib
+    # URL is like "http://localhost:8123/" 
+    query = "SELECT event, value, description FROM system.events FORMAT CSV"
+    
+    try:
+        req = urllib.request.Request(url, data=query.encode('utf-8'), method='POST')
+        with urllib.request.urlopen(req, timeout=30) as response:
+            body = response.read().decode('utf-8')
+    except Exception as e:
+        print(f"Warning: Failed to query system.events: {e}")
+        return []
+    
+    # Parse CSV response
+    rows = []
+    for line in body.strip().split('\n'):
+        if not line:
+            continue
+        # CSV format: "event_name",value,"description"
+        # Use csv reader for proper parsing
+        reader = csv.reader(io.StringIO(line))
+        for row in reader:
+            if len(row) >= 2:
+                rows.append(row)
+    return rows
+
+
+def save_system_events(output_dir: str, schedule_name: str, suffix: str, 
+                       events_data: List[List[str]]) -> str:
+    """Save system.events data to a CSV file."""
+    filename = f"{schedule_name}_events_{suffix}.csv"
+    filepath = os.path.join(output_dir, filename)
+    
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["event", "value", "description"])
+        for row in events_data:
+            w.writerow(row)
+    
+    return filepath
+
+
+def compute_events_diff(start_events: List[List[str]], end_events: List[List[str]], 
+                        output_dir: str, schedule_name: str) -> str:
+    """
+    Compute the difference (end - start) for each event and save to CSV.
+    """
+    # Build lookup from event name to value for start events
+    start_map: Dict[str, int] = {}
+    desc_map: Dict[str, str] = {}
+    for row in start_events:
+        if len(row) >= 2:
+            event_name = row[0]
+            try:
+                start_map[event_name] = int(row[1])
+            except ValueError:
+                start_map[event_name] = 0
+            if len(row) >= 3:
+                desc_map[event_name] = row[2]
+    
+    # Build lookup for end events
+    end_map: Dict[str, int] = {}
+    for row in end_events:
+        if len(row) >= 2:
+            event_name = row[0]
+            try:
+                end_map[event_name] = int(row[1])
+            except ValueError:
+                end_map[event_name] = 0
+            if len(row) >= 3 and event_name not in desc_map:
+                desc_map[event_name] = row[2]
+    
+    # Compute differences
+    all_events = set(start_map.keys()) | set(end_map.keys())
+    diff_rows = []
+    for event_name in sorted(all_events):
+        start_val = start_map.get(event_name, 0)
+        end_val = end_map.get(event_name, 0)
+        diff_val = end_val - start_val
+        desc = desc_map.get(event_name, "")
+        diff_rows.append([event_name, start_val, end_val, diff_val, desc])
+    
+    # Save to file
+    filename = f"{schedule_name}_events_diff.csv"
+    filepath = os.path.join(output_dir, filename)
+    
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["event", "start_value", "end_value", "diff", "description"])
+        for row in diff_rows:
+            w.writerow(row)
     
     return filepath
 
@@ -232,6 +333,10 @@ async def run_schedule(
     print(f"Running schedule: {schedule_path}")
     print(f"{'='*60}\n")
     
+    # Collect system.events at start
+    print("Collecting system.events (start)...")
+    start_events = query_system_events(url)
+    
     events = read_schedule_csv(schedule_path)
 
     # Preload SQL bytes for each qid (so send path is lightweight)
@@ -269,13 +374,25 @@ async def run_schedule(
         ]
         await asyncio.gather(*tasks)
 
+    # Collect system.events at end
+    print("\nCollecting system.events (end)...")
+    end_events = query_system_events(url)
+
     # Save results
     raw_path = save_raw_data(output_dir, schedule_name, latency_records)
     stats_path = save_statistics(output_dir, schedule_name, latency_records, qid_list)
     
+    # Save system.events data
+    start_events_path = save_system_events(output_dir, schedule_name, "start", start_events)
+    end_events_path = save_system_events(output_dir, schedule_name, "end", end_events)
+    diff_events_path = compute_events_diff(start_events, end_events, output_dir, schedule_name)
+    
     print(f"\nSchedule '{schedule_name}' completed.")
     print(f"  Raw data saved to: {raw_path}")
     print(f"  Statistics saved to: {stats_path}")
+    print(f"  Events (start) saved to: {start_events_path}")
+    print(f"  Events (end) saved to: {end_events_path}")
+    print(f"  Events (diff) saved to: {diff_events_path}")
     
     # Print summary to console
     if latency_records:

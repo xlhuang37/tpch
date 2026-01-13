@@ -25,4 +25,5 @@ ORDER BY
     l_returnflag,
     l_linestatus
 SETTINGS
+    max_threads=2,
     workload='SpeedUpTwo';

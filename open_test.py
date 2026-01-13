@@ -8,9 +8,10 @@ import csv
 import glob
 import os
 import time
-from dataclasses import dataclass
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 import aiohttp
 import io
@@ -30,6 +31,20 @@ class LatencyRecord:
     end_ms: float         # Query completion time
     latency_ms: float     # end_ms - start_ms (execution time)
     qid: str
+
+
+@dataclass
+class ScheduleEventsTrace:
+    """A single trace of system.events during schedule execution."""
+    timestamp_ms: float   # Relative to schedule start
+    events: List[List[str]]  # List of [event, value, description]
+
+
+@dataclass
+class QueryProfileTrace:
+    """A single trace of ProfileEvents for a query."""
+    timestamp_ms: float   # Relative to query start
+    profile_events: Dict[str, Any]  # ProfileEvents map
 
 
 def compute_percentile(sorted_values: List[float], p: float) -> float:
@@ -212,6 +227,153 @@ def compute_events_diff(start_events: List[List[str]], end_events: List[List[str
     return filepath
 
 
+def save_schedule_events_traces(output_dir: str, schedule_name: str, 
+                                 traces: List[ScheduleEventsTrace]) -> str:
+    """
+    Save periodic system.events traces collected during schedule execution.
+    Each row is one trace: timestamp_ms, followed by event data.
+    Format: timestamp_ms,event1,value1,desc1,event2,value2,desc2,...
+    """
+    filename = f"{schedule_name}_periodic_events.csv"
+    filepath = os.path.join(output_dir, filename)
+    
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        # Header: timestamp_ms followed by flattened event data
+        w.writerow(["timestamp_ms", "events_data"])
+        for trace in traces:
+            # Flatten events into a single comma-separated string for the row
+            events_str = ";".join([
+                f"{row[0]}={row[1]}" + (f"({row[2]})" if len(row) > 2 else "")
+                for row in trace.events
+            ])
+            w.writerow([f"{trace.timestamp_ms:.2f}", events_str])
+    
+    return filepath
+
+
+def query_profile_events(url: str, query_id: str) -> Dict[str, Any]:
+    """
+    Query ProfileEvents from system.processes for a specific query_id.
+    Returns the ProfileEvents map or empty dict if not found.
+    """
+    query = f"SELECT ProfileEvents FROM system.processes WHERE query_id='{query_id}' FORMAT JSON"
+    
+    try:
+        req = urllib.request.Request(url, data=query.encode('utf-8'), method='POST')
+        with urllib.request.urlopen(req, timeout=5) as response:
+            body = response.read().decode('utf-8')
+    except Exception as e:
+        # Query might not be running anymore or connection issue
+        return {}
+    
+    try:
+        import json
+        data = json.loads(body)
+        if data.get("data") and len(data["data"]) > 0:
+            profile_events = data["data"][0].get("ProfileEvents", {})
+            return profile_events if isinstance(profile_events, dict) else {}
+    except Exception:
+        pass
+    
+    return {}
+
+
+def save_query_profile_traces(per_query_dir: str, query_id: str, 
+                               traces: List[QueryProfileTrace]) -> str:
+    """
+    Save ProfileEvents traces for a single query to its own file.
+    """
+    # Sanitize query_id for filename
+    safe_query_id = query_id.replace("/", "_").replace("\\", "_")
+    filename = f"{safe_query_id}.csv"
+    filepath = os.path.join(per_query_dir, filename)
+    
+    if not traces:
+        # Create empty file to indicate no traces were collected
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
+            f.write("# No traces collected (query may have been rejected or too short)\n")
+        return filepath
+    
+    # Collect all unique event names across all traces
+    all_event_names = set()
+    for trace in traces:
+        all_event_names.update(trace.profile_events.keys())
+    sorted_event_names = sorted(all_event_names)
+    
+    with open(filepath, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        # Header: timestamp_ms followed by each event name
+        w.writerow(["timestamp_ms"] + sorted_event_names)
+        for trace in traces:
+            row = [f"{trace.timestamp_ms:.2f}"]
+            for event_name in sorted_event_names:
+                row.append(trace.profile_events.get(event_name, 0))
+            w.writerow(row)
+    
+    return filepath
+
+
+async def periodic_system_events_collector(
+    url: str,
+    period_ms: int,
+    traces: List[ScheduleEventsTrace],
+    traces_lock: asyncio.Lock,
+    t0_ns: int,
+    stop_event: asyncio.Event,
+) -> None:
+    """
+    Background task to periodically collect system.events during schedule execution.
+    """
+    while not stop_event.is_set():
+        # Collect events
+        events = query_system_events(url)
+        timestamp_ms = (time.perf_counter_ns() - t0_ns) / 1e6
+        
+        async with traces_lock:
+            traces.append(ScheduleEventsTrace(
+                timestamp_ms=timestamp_ms,
+                events=events
+            ))
+        
+        # Wait for next collection period
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=period_ms / 1000.0)
+        except asyncio.TimeoutError:
+            pass  # Continue collecting
+
+
+async def query_profile_collector(
+    url: str,
+    query_id: str,
+    period_ms: int,
+    traces: List[QueryProfileTrace],
+    traces_lock: asyncio.Lock,
+    query_start_ns: int,
+    stop_event: asyncio.Event,
+) -> None:
+    """
+    Background task to periodically collect ProfileEvents for a specific query.
+    """
+    while not stop_event.is_set():
+        # Collect ProfileEvents
+        profile_events = query_profile_events(url, query_id)
+        timestamp_ms = (time.perf_counter_ns() - query_start_ns) / 1e6
+        
+        if profile_events:  # Only record if we got data
+            async with traces_lock:
+                traces.append(QueryProfileTrace(
+                    timestamp_ms=timestamp_ms,
+                    profile_events=profile_events
+                ))
+        
+        # Wait for next collection period
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=period_ms / 1000.0)
+        except asyncio.TimeoutError:
+            pass  # Continue collecting
+
+
 def read_schedule_csv(path: str) -> List[Event]:
     events: List[Event] = []
     with open(path, newline="") as f:
@@ -253,6 +415,12 @@ async def wait_until_ns(target_ns: int, spin_ns: int) -> None:
             return
 
 
+def generate_query_id(qid: str, at_ms: int) -> str:
+    """Generate a unique query ID for ClickHouse."""
+    unique_suffix = uuid.uuid4().hex[:8]
+    return f"{qid}_{at_ms}_{unique_suffix}"
+
+
 async def send_one(
     session: aiohttp.ClientSession,
     url: str,
@@ -263,6 +431,8 @@ async def send_one(
     sem: asyncio.Semaphore,
     latency_records: List[LatencyRecord],
     records_lock: asyncio.Lock,
+    per_query_dir: str,
+    query_trace_period_ms: int,
     max_retries: int = 1000,
     retry_delay_ms: float = 10000,
 ) -> None:
@@ -274,19 +444,49 @@ async def send_one(
     arrival_ms = (arrival_ns - t0_ns) / 1e6
 
     for attempt in range(max_retries):
+        # Generate unique query ID for this attempt
+        query_id = generate_query_id(event.qid, event.at_ms)
+        
+        # Prepare URL with query_id parameter
+        query_url = f"{url.rstrip('/')}/?query_id={query_id}"
+        
+        # Initialize per-query trace collection
+        query_traces: List[QueryProfileTrace] = []
+        query_traces_lock = asyncio.Lock()
+        stop_event = asyncio.Event()
+        collector_task = None
+        
         async with sem:
             req_start_ns = time.perf_counter_ns()
             start_ms = (req_start_ns - t0_ns) / 1e6
             
             try:
-                async with session.post(url, data=sql_bytes) as resp:
+                # Start profile events collector for this query
+                collector_task = asyncio.create_task(
+                    query_profile_collector(
+                        url=url,
+                        query_id=query_id,
+                        period_ms=query_trace_period_ms,
+                        traces=query_traces,
+                        traces_lock=query_traces_lock,
+                        query_start_ns=req_start_ns,
+                        stop_event=stop_event,
+                    )
+                )
+                
+                async with session.post(query_url, data=sql_bytes) as resp:
                     body = await resp.read()
                     req_end_ns = time.perf_counter_ns()
                     end_ms = (req_end_ns - t0_ns) / 1e6
                     latency_ms = (req_end_ns - req_start_ns) / 1e6
+                    
+                    # Stop the collector
+                    stop_event.set()
+                    if collector_task:
+                        await collector_task
 
                     if resp.status == 200:
-                        # Success - record and return
+                        # Success - record and save traces
                         async with records_lock:
                             latency_records.append(LatencyRecord(
                                 arrival_ms=arrival_ms,
@@ -295,19 +495,34 @@ async def send_one(
                                 latency_ms=latency_ms,
                                 qid=event.qid
                             ))
+                        
+                        # Save query profile traces
+                        if per_query_dir:
+                            save_query_profile_traces(per_query_dir, query_id, query_traces)
+                        
                         wait_ms = start_ms - arrival_ms
-                        print(f"[{event.at_ms:>6} ms] {event.qid}: OK "
-                              f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms")
+                        print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
+                              f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms traces={len(query_traces)}")
                         return
                     else:
-                        # Server rejected (e.g., overloaded) - retry
+                        # Server rejected (e.g., overloaded) - clear traces and retry
+                        query_traces.clear()  # Clear traces on rejection
                         snippet = body[:200].decode("utf-8", errors="replace")
-                        print(f"[{event.at_ms:>6} ms] {event.qid}: HTTP {resp.status} "
-                              f"(attempt {attempt+1}) - retrying... resp='{snippet}'")
+                        print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
+                              f"(attempt {attempt+1}) - traces cleared, retrying... resp='{snippet}'")
                         
             except Exception as e:
-                print(f"[{event.at_ms:>6} ms] {event.qid}: ERROR {e} "
-                      f"(attempt {attempt+1}) - retrying...")
+                # Stop the collector on exception
+                stop_event.set()
+                if collector_task:
+                    try:
+                        await collector_task
+                    except Exception:
+                        pass
+                # Clear traces on error
+                query_traces.clear()
+                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): ERROR {e} "
+                      f"(attempt {attempt+1}) - traces cleared, retrying...")
         
         # Wait before retry (outside sem to not block others)
         print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
@@ -326,12 +541,19 @@ async def run_schedule(
     max_concurrency: int,
     spin_ns: int,
     output_dir: str,
+    schedule_trace_period_ms: int,
+    query_trace_period_ms: int,
 ) -> None:
     """Run a single schedule and save results."""
     schedule_name = os.path.splitext(os.path.basename(schedule_path))[0]
     print(f"\n{'='*60}")
     print(f"Running schedule: {schedule_path}")
+    print(f"Schedule trace period: {schedule_trace_period_ms}ms, Query trace period: {query_trace_period_ms}ms")
     print(f"{'='*60}\n")
+    
+    # Create per_query_events directory for this schedule
+    per_query_dir = os.path.join(output_dir, "per_query_events", schedule_name)
+    os.makedirs(per_query_dir, exist_ok=True)
     
     # Collect system.events at start
     print("Collecting system.events (start)...")
@@ -353,8 +575,26 @@ async def run_schedule(
     
     latency_records: List[LatencyRecord] = []
     records_lock = asyncio.Lock()
+    
+    # Initialize periodic system.events collection
+    schedule_traces: List[ScheduleEventsTrace] = []
+    schedule_traces_lock = asyncio.Lock()
+    schedule_stop_event = asyncio.Event()
 
     t0_ns = time.perf_counter_ns()
+    
+    # Start periodic system.events collector
+    schedule_collector_task = asyncio.create_task(
+        periodic_system_events_collector(
+            url=url,
+            period_ms=schedule_trace_period_ms,
+            traces=schedule_traces,
+            traces_lock=schedule_traces_lock,
+            t0_ns=t0_ns,
+            stop_event=schedule_stop_event,
+        )
+    )
+    
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
         tasks = [
             asyncio.create_task(
@@ -368,11 +608,17 @@ async def run_schedule(
                     sem=sem,
                     latency_records=latency_records,
                     records_lock=records_lock,
+                    per_query_dir=per_query_dir,
+                    query_trace_period_ms=query_trace_period_ms,
                 )
             )
             for e in events
         ]
         await asyncio.gather(*tasks)
+    
+    # Stop the periodic system.events collector
+    schedule_stop_event.set()
+    await schedule_collector_task
 
     # Collect system.events at end
     print("\nCollecting system.events (end)...")
@@ -387,12 +633,17 @@ async def run_schedule(
     end_events_path = save_system_events(output_dir, schedule_name, "end", end_events)
     diff_events_path = compute_events_diff(start_events, end_events, output_dir, schedule_name)
     
+    # Save periodic schedule traces
+    periodic_events_path = save_schedule_events_traces(output_dir, schedule_name, schedule_traces)
+    
     print(f"\nSchedule '{schedule_name}' completed.")
     print(f"  Raw data saved to: {raw_path}")
     print(f"  Statistics saved to: {stats_path}")
     print(f"  Events (start) saved to: {start_events_path}")
     print(f"  Events (end) saved to: {end_events_path}")
     print(f"  Events (diff) saved to: {diff_events_path}")
+    print(f"  Periodic events ({len(schedule_traces)} traces) saved to: {periodic_events_path}")
+    print(f"  Per-query traces saved to: {per_query_dir}")
     
     # Print summary to console
     if latency_records:
@@ -411,6 +662,10 @@ async def main():
                     help="Max in-flight HTTP requests from the client")
     ap.add_argument("--spin-ns", type=int, default=100000,
                     help="Final busy-wait window for timing accuracy (microseconds)")
+    ap.add_argument("--schedule-trace-period-ms", type=int, default=1000,
+                    help="Period in ms for collecting system.events during schedule execution (default: 1000)")
+    ap.add_argument("--query-trace-period-ms", type=int, default=5000,
+                    help="Period in ms for collecting ProfileEvents per query (default: 5000)")
     args = ap.parse_args()
 
     # Discover all CSV files in the schedules directory
@@ -424,6 +679,9 @@ async def main():
     print(f"Found {len(schedule_paths)} schedule(s) in {args.schedules_dir}:")
     for p in schedule_paths:
         print(f"  - {os.path.basename(p)}")
+    print(f"\nMetrics collection:")
+    print(f"  Schedule events period: {args.schedule_trace_period_ms}ms")
+    print(f"  Query trace period: {args.query_trace_period_ms}ms")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -440,6 +698,8 @@ async def main():
             max_concurrency=args.max_concurrency,
             spin_ns=args.spin_ns,
             output_dir=output_dir,
+            schedule_trace_period_ms=args.schedule_trace_period_ms,
+            query_trace_period_ms=args.query_trace_period_ms,
         )
 
     print(f"\n{'='*60}")

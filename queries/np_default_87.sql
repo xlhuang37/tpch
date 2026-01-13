@@ -23,6 +23,4 @@ GROUP BY
     l_linestatus
 ORDER BY
     l_returnflag,
-    l_linestatus
-SETTINGS
-    max_threads=2;
+    l_linestatus;

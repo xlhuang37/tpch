@@ -1,4 +1,4 @@
-../ClickHouse/build-debug/programs/clickhouse-client --param_rounding=5 --param_seconds=30 --query "SELECT
+../ClickHouse/build/programs/clickhouse-client --param_rounding=5 --param_seconds=30 --query "SELECT
 
     CAST(toStartOfInterval(event_time, toIntervalSecond({rounding:UInt32})), 'INT') AS t,
 

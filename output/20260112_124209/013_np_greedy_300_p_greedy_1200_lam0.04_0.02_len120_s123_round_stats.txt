@@ -1,0 +1,37 @@
+Statistics for schedule: 013_np_greedy_300_p_greedy_1200_lam0.04_0.02_len120_s123_round
+Total queries: 15
+============================================================
+
+OVERALL STATISTICS
+----------------------------------------
+  Count:    15
+  Average:  44582.1439 ms
+  Min:      9582.1063 ms
+  Max:      81977.7323 ms
+  P50:      61723.4622 ms
+  P90:      79180.8301 ms
+  P95:      80050.6740 ms
+  P99:      81592.3207 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_greedy_300:
+    Count:    8
+    Average:  72911.0543 ms
+    Min:      61723.4622 ms
+    Max:      81977.7323 ms
+    P50:      74478.6539 ms
+    P90:      80050.6740 ms
+    P95:      81014.2032 ms
+    P99:      81785.0265 ms
+
+  p_greedy_1200:
+    Count:    7
+    Average:  12206.2462 ms
+    Min:      9582.1063 ms
+    Max:      20299.3758 ms
+    P50:      10168.5268 ms
+    P90:      17168.2808 ms
+    P95:      18733.8283 ms
+    P99:      19986.2663 ms

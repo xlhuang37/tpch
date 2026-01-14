@@ -7,6 +7,7 @@ import asyncio
 import csv
 import glob
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -387,14 +388,25 @@ def read_schedule_csv(path: str) -> List[Event]:
     return events
 
 
-def load_query(queries_dir: str, qid: str) -> bytes:
+def extract_workload_from_sql(sql: bytes) -> Optional[str]:
+    """Extract workload setting from SQL if present."""
+    # Match workload='...' or workload="..."
+    match = re.search(rb"workload\s*=\s*['\"]([^'\"]+)['\"]", sql, re.IGNORECASE)
+    if match:
+        return match.group(1).decode('utf-8')
+    return None
+
+
+def load_query(queries_dir: str, qid: str) -> tuple:
+    """Load query and extract workload. Returns (sql_bytes, workload_name or None)."""
     qpath = os.path.join(queries_dir, f"{qid}.sql")
     if not os.path.exists(qpath):
         raise FileNotFoundError(f"Missing query file: {qpath}")
     with open(qpath, "rb") as f:
         sql = f.read().strip()
+    workload = extract_workload_from_sql(sql)
     # ClickHouse accepts query in request body; ensure newline at end
-    return sql + b"\n"
+    return (sql + b"\n", workload)
 
 
 async def wait_until_ns(target_ns: int, spin_ns: int) -> None:
@@ -426,6 +438,7 @@ async def send_one(
     url: str,
     event: Event,
     sql_bytes: bytes,
+    workload: Optional[str],
     t0_ns: int,
     spin_ns: int,
     sem: asyncio.Semaphore,
@@ -447,8 +460,10 @@ async def send_one(
         # Generate unique query ID for this attempt
         query_id = generate_query_id(event.qid, event.at_ms)
         
-        # Prepare URL with query_id parameter
+        # Prepare URL with query_id and workload parameters
         query_url = f"{url.rstrip('/')}/?query_id={query_id}"
+        if workload:
+            query_url += f"&workload={workload}"
         
         # Initialize per-query trace collection
         query_traces: List[QueryProfileTrace] = []
@@ -561,8 +576,8 @@ async def run_schedule(
     
     events = read_schedule_csv(schedule_path)
 
-    # Preload SQL bytes for each qid (so send path is lightweight)
-    sql_cache = {}
+    # Preload SQL bytes and workload for each qid (so send path is lightweight)
+    sql_cache = {}  # qid -> (sql_bytes, workload_name or None)
     qid_list = []
     for e in events:
         if e.qid not in sql_cache:
@@ -602,7 +617,8 @@ async def run_schedule(
                     session=session,
                     url=url,
                     event=e,
-                    sql_bytes=sql_cache[e.qid],
+                    sql_bytes=sql_cache[e.qid][0],
+                    workload=sql_cache[e.qid][1],
                     t0_ns=t0_ns,
                     spin_ns=spin_ns,
                     sem=sem,

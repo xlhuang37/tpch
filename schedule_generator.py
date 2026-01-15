@@ -34,14 +34,14 @@ class ScheduleConfig:
 # Define all schedules to generate
 SCHEDULES: List[ScheduleConfig] = [
     # # Load Config
-    ScheduleConfig(load=18, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=18, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
-    ScheduleConfig(load=36 ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=36, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
-    ScheduleConfig(load=54, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=54, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
+    # ScheduleConfig(load=18, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
+    # ScheduleConfig(load=18, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
+    # ScheduleConfig(load=36 ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
+    # ScheduleConfig(load=36, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
+    # ScheduleConfig(load=54, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
+    # ScheduleConfig(load=54, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
     # # 
-    # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
+    ScheduleConfig(load=36, ratio=2.0, length=12, query_type="greedy", p_size=2400, np_size=300),
     # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
     # ScheduleConfig(load=12, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
     # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
@@ -79,6 +79,7 @@ SCHEDULES: List[ScheduleConfig] = [
 
 # Directory containing query SQL files
 QUERIES_DIR = "./queries"
+SCHEDULES_DIR = "./schedules"
 
 # =============================================================================
 # END OF CONFIGURATION
@@ -181,6 +182,9 @@ def main():
     print("=" * 70)
     print("Schedule Generator")
     print("=" * 70)
+
+    os.rmdir(SCHEDULES_DIR)
+    os.makedirs(SCHEDULES_DIR, exist_ok=True)
     
     # Load query CPU seconds from directory
     query_cpu_seconds = load_query_cpu_seconds(QUERIES_DIR)

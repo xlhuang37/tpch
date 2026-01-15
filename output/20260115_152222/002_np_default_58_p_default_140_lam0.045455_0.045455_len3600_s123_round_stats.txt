@@ -1,0 +1,67 @@
+Statistics for schedule: 002_np_default_58_p_default_140_lam0.045455_0.045455_len3600_s123_round
+Total completed queries: 344
+Total dropped queries: 0
+============================================================
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    344
+  Average:  23314.1937 ms
+  Min:      4685.7455 ms
+  Max:      59780.3764 ms
+  P50:      30069.6323 ms
+  P90:      43462.0094 ms
+  P95:      47431.8853 ms
+  P99:      52520.0698 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    344
+  Average:  0.0605 ms
+  Min:      0.0166 ms
+  Max:      0.1186 ms
+  P50:      0.0571 ms
+  P90:      0.0749 ms
+  P95:      0.0804 ms
+  P99:      0.0991 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_default_58:
+    Completed: 176
+    Latency:
+      Average:  39272.0891 ms
+      Min:      27336.0243 ms
+      Max:      59780.3764 ms
+      P50:      38092.2638 ms
+      P90:      47332.6612 ms
+      P95:      51689.7721 ms
+      P99:      57952.4915 ms
+    Wait Time:
+      Average:  0.0592 ms
+      Min:      0.0166 ms
+      Max:      0.1186 ms
+      P50:      0.0567 ms
+      P90:      0.0719 ms
+      P95:      0.0781 ms
+      P99:      0.0939 ms
+
+  p_default_140:
+    Completed: 168
+    Latency:
+      Average:  6596.3986 ms
+      Min:      4685.7455 ms
+      Max:      16458.9362 ms
+      P50:      5291.2040 ms
+      P90:      9806.2886 ms
+      P95:      10699.3711 ms
+      P99:      14765.7558 ms
+    Wait Time:
+      Average:  0.0619 ms
+      Min:      0.0180 ms
+      Max:      0.1131 ms
+      P50:      0.0575 ms
+      P90:      0.0777 ms
+      P95:      0.0833 ms
+      P99:      0.0981 ms

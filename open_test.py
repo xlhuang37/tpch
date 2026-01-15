@@ -657,8 +657,12 @@ async def run_schedule(
     print(f"{'='*60}\n")
     
     # Create per_query_events directory for this schedule
-    per_query_dir = os.path.join(output_dir, "per_query_events", schedule_name)
-    os.makedirs(per_query_dir, exist_ok=True)
+    if(trace_processes):
+        print("Tracing per query events are enabled")
+        per_query_dir = os.path.join(output_dir, "per_query_events", schedule_name)
+        os.makedirs(per_query_dir, exist_ok=True)
+    else:
+        per_query_dir = None
     
     # Collect system.events at start
     print("Collecting system.events (start)...")

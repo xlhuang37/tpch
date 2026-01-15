@@ -2,12 +2,11 @@
 #SBATCH --job-name=bench_server
 #SBATCH --output=bench_%j.log
 #SBATCH --nodes=1
-#SBATCH --ntasks=2            
-#SBATCH --cpus-per-task=64     
+#SBATCH --ntasks=1           
+#SBATCH --cpus-per-task=96     
 #SBATCH --mem=320g
 #SBATCH --mem-bind=local
-#SBATCH --sockets-per-node=1    # Excellent for avoiding NUMA latency
-#SBATCH --time=12:00:00
+#SBATCH --sockets-per-node=1  
 
 echo "Job started on $(hostname)"
 
@@ -18,10 +17,8 @@ echo "Job started on $(hostname)"
 
 srun --ntasks=1 \
      --cpus-per-task=64 \
-     --exclusive \
-     --cpu-bind=cores \
+     --cpu-bind=map_cpu:0-63 \
      --mem-bind=local \
-     --distribution=block:block \
      ./server_start.sh & 
 
 # Capture the Process ID of the srun command (not the python process, but the step launcher)
@@ -36,10 +33,8 @@ sleep 10
 
 srun --ntasks=1 \
      --cpus-per-task=4 \
-     --exclusive \
-     --cpu-bind=cores \
+     --cpu-bind=map_cpu:64-67 \
      --mem-bind=local \
-     --distribution=block:block \
      python open_test.py
 
 # --- STEP 3: Cleanup ---

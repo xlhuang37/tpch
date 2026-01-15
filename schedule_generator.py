@@ -183,7 +183,7 @@ def main():
     print("Schedule Generator")
     print("=" * 70)
 
-    os.rmdir(SCHEDULES_DIR)
+    os.system(f"rm -r {SCHEDULES_DIR}")
     os.makedirs(SCHEDULES_DIR, exist_ok=True)
     
     # Load query CPU seconds from directory

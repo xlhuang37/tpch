@@ -30,8 +30,15 @@ class LatencyRecord:
     arrival_ms: float     # Actual arrival time (relative to t0)
     start_ms: float       # Actual query start time (when server accepted)
     end_ms: float         # Query completion time
-    latency_ms: float     # end_ms - start_ms (execution time)
+    latency_ms: float     # end_ms - arrival_ms (total latency including wait)
+    wait_ms: float        # start_ms - arrival_ms (time waiting before execution)
     qid: str
+
+
+@dataclass
+class DroppedRecord:
+    arrival_ms: float     # Actual arrival time (relative to t0)
+    qid: str              # Query type
 
 
 @dataclass
@@ -67,44 +74,87 @@ def compute_percentile(sorted_values: List[float], p: float) -> float:
     return sorted_values[lower] * (1 - weight) + sorted_values[upper] * weight
 
 
-def save_raw_data(output_dir: str, schedule_name: str, records: List[LatencyRecord]) -> str:
-    """Save raw data (arrival_ms, start_ms, end_ms, latency_ms, qid) sorted by arrival_ms to a CSV file."""
-    sorted_records = sorted(records, key=lambda r: (r.arrival_ms, r.qid))
+def save_raw_data(output_dir: str, schedule_name: str, records: List[LatencyRecord], 
+                  dropped_records: List[DroppedRecord]) -> str:
+    """Save raw data (arrival_ms, start_ms, end_ms, latency_ms, wait_ms, qid) sorted by arrival_ms to a CSV file.
+    Dropped queries are saved with just arrival_ms, a dropped message, and qid."""
+    # Combine and sort all records by arrival_ms
+    all_entries = []
+    for r in records:
+        all_entries.append(('record', r.arrival_ms, r))
+    for d in dropped_records:
+        all_entries.append(('dropped', d.arrival_ms, d))
+    all_entries.sort(key=lambda x: (x[1], x[2].qid))
+    
     filename = f"{schedule_name}_raw.csv"
     filepath = os.path.join(output_dir, filename)
     
     with open(filepath, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["arrival_ms", "start_ms", "end_ms", "latency_ms", "qid"])
-        for r in sorted_records:
-            w.writerow([f"{r.arrival_ms:.4f}", f"{r.start_ms:.4f}", 
-                       f"{r.end_ms:.4f}", f"{r.latency_ms:.4f}", r.qid])
+        w.writerow(["arrival_ms", "start_ms", "end_ms", "latency_ms", "wait_ms", "qid"])
+        for entry_type, _, entry in all_entries:
+            if entry_type == 'record':
+                r = entry
+                w.writerow([f"{r.arrival_ms:.4f}", f"{r.start_ms:.4f}", 
+                           f"{r.end_ms:.4f}", f"{r.latency_ms:.4f}", f"{r.wait_ms:.4f}", r.qid])
+            else:
+                d = entry
+                w.writerow([f"{d.arrival_ms:.4f}", "DROPPED", "DROPPED", "DROPPED", "DROPPED", d.qid])
     
     return filepath
 
 
-def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRecord], qid_list: List[str]) -> str:
-    """Save statistics (average, percentiles) to a text file."""
+def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRecord], 
+                    dropped_records: List[DroppedRecord], qid_list: List[str]) -> str:
+    """Save statistics (average, percentiles) for latency and wait time to a text file.
+    Dropped queries are excluded from latency/wait stats but reported separately."""
     filename = f"{schedule_name}_stats.txt"
     filepath = os.path.join(output_dir, filename)
     
     # Group records by qid
-    by_qid: Dict[str, List[float]] = {qid: [] for qid in qid_list}
+    latencies_by_qid: Dict[str, List[float]] = {qid: [] for qid in qid_list}
+    waits_by_qid: Dict[str, List[float]] = {qid: [] for qid in qid_list}
     all_latencies: List[float] = []
+    all_waits: List[float] = []
     
     for r in records:
-        by_qid[r.qid].append(r.latency_ms)
+        latencies_by_qid[r.qid].append(r.latency_ms)
+        waits_by_qid[r.qid].append(r.wait_ms)
         all_latencies.append(r.latency_ms)
+        all_waits.append(r.wait_ms)
+    
+    # Count dropped queries by qid
+    dropped_by_qid: Dict[str, int] = {qid: 0 for qid in qid_list}
+    for d in dropped_records:
+        if d.qid in dropped_by_qid:
+            dropped_by_qid[d.qid] += 1
+        else:
+            dropped_by_qid[d.qid] = 1
+    total_dropped = len(dropped_records)
     
     with open(filepath, "w") as f:
         f.write(f"Statistics for schedule: {schedule_name}\n")
-        f.write(f"Total queries: {len(records)}\n")
+        f.write(f"Total completed queries: {len(records)}\n")
+        f.write(f"Total dropped queries: {total_dropped}\n")
         f.write("=" * 60 + "\n\n")
         
-        # Overall statistics
+        # Dropped queries report
+        if total_dropped > 0:
+            f.write("DROPPED QUERIES\n")
+            f.write("-" * 40 + "\n")
+            for qid in qid_list:
+                if dropped_by_qid[qid] > 0:
+                    f.write(f"  {qid}: {dropped_by_qid[qid]}\n")
+            # Include any qids not in qid_list
+            for qid, count in dropped_by_qid.items():
+                if qid not in qid_list and count > 0:
+                    f.write(f"  {qid}: {count}\n")
+            f.write("\n")
+        
+        # Overall latency statistics
         if all_latencies:
             sorted_all = sorted(all_latencies)
-            f.write("OVERALL STATISTICS\n")
+            f.write("OVERALL LATENCY STATISTICS\n")
             f.write("-" * 40 + "\n")
             f.write(f"  Count:    {len(sorted_all)}\n")
             f.write(f"  Average:  {sum(sorted_all) / len(sorted_all):.4f} ms\n")
@@ -116,22 +166,53 @@ def save_statistics(output_dir: str, schedule_name: str, records: List[LatencyRe
             f.write(f"  P99:      {compute_percentile(sorted_all, 99):.4f} ms\n")
             f.write("\n")
         
+        # Overall wait time statistics
+        if all_waits:
+            sorted_waits = sorted(all_waits)
+            f.write("OVERALL WAIT TIME STATISTICS\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"  Count:    {len(sorted_waits)}\n")
+            f.write(f"  Average:  {sum(sorted_waits) / len(sorted_waits):.4f} ms\n")
+            f.write(f"  Min:      {sorted_waits[0]:.4f} ms\n")
+            f.write(f"  Max:      {sorted_waits[-1]:.4f} ms\n")
+            f.write(f"  P50:      {compute_percentile(sorted_waits, 50):.4f} ms\n")
+            f.write(f"  P90:      {compute_percentile(sorted_waits, 90):.4f} ms\n")
+            f.write(f"  P95:      {compute_percentile(sorted_waits, 95):.4f} ms\n")
+            f.write(f"  P99:      {compute_percentile(sorted_waits, 99):.4f} ms\n")
+            f.write("\n")
+        
         # Per-qid statistics
         f.write("PER-QUERY STATISTICS\n")
         f.write("-" * 40 + "\n")
         for qid in qid_list:
-            latencies = by_qid[qid]
-            if latencies:
-                sorted_lat = sorted(latencies)
+            latencies = latencies_by_qid[qid]
+            waits = waits_by_qid[qid]
+            dropped_count = dropped_by_qid[qid]
+            
+            if latencies or dropped_count > 0:
                 f.write(f"\n  {qid}:\n")
-                f.write(f"    Count:    {len(sorted_lat)}\n")
-                f.write(f"    Average:  {sum(sorted_lat) / len(sorted_lat):.4f} ms\n")
-                f.write(f"    Min:      {sorted_lat[0]:.4f} ms\n")
-                f.write(f"    Max:      {sorted_lat[-1]:.4f} ms\n")
-                f.write(f"    P50:      {compute_percentile(sorted_lat, 50):.4f} ms\n")
-                f.write(f"    P90:      {compute_percentile(sorted_lat, 90):.4f} ms\n")
-                f.write(f"    P95:      {compute_percentile(sorted_lat, 95):.4f} ms\n")
-                f.write(f"    P99:      {compute_percentile(sorted_lat, 99):.4f} ms\n")
+                if dropped_count > 0:
+                    f.write(f"    Dropped:  {dropped_count}\n")
+                if latencies:
+                    sorted_lat = sorted(latencies)
+                    sorted_wait = sorted(waits)
+                    f.write(f"    Completed: {len(sorted_lat)}\n")
+                    f.write(f"    Latency:\n")
+                    f.write(f"      Average:  {sum(sorted_lat) / len(sorted_lat):.4f} ms\n")
+                    f.write(f"      Min:      {sorted_lat[0]:.4f} ms\n")
+                    f.write(f"      Max:      {sorted_lat[-1]:.4f} ms\n")
+                    f.write(f"      P50:      {compute_percentile(sorted_lat, 50):.4f} ms\n")
+                    f.write(f"      P90:      {compute_percentile(sorted_lat, 90):.4f} ms\n")
+                    f.write(f"      P95:      {compute_percentile(sorted_lat, 95):.4f} ms\n")
+                    f.write(f"      P99:      {compute_percentile(sorted_lat, 99):.4f} ms\n")
+                    f.write(f"    Wait Time:\n")
+                    f.write(f"      Average:  {sum(sorted_wait) / len(sorted_wait):.4f} ms\n")
+                    f.write(f"      Min:      {sorted_wait[0]:.4f} ms\n")
+                    f.write(f"      Max:      {sorted_wait[-1]:.4f} ms\n")
+                    f.write(f"      P50:      {compute_percentile(sorted_wait, 50):.4f} ms\n")
+                    f.write(f"      P90:      {compute_percentile(sorted_wait, 90):.4f} ms\n")
+                    f.write(f"      P95:      {compute_percentile(sorted_wait, 95):.4f} ms\n")
+                    f.write(f"      P99:      {compute_percentile(sorted_wait, 99):.4f} ms\n")
     
     return filepath
 
@@ -527,6 +608,7 @@ async def send_one(
     spin_ns: int,
     sem: asyncio.Semaphore,
     latency_records: List[LatencyRecord],
+    dropped_records: List[DroppedRecord],
     records_lock: asyncio.Lock,
     per_query_dir: str,
     query_trace_period_ms: int,
@@ -579,7 +661,8 @@ async def send_one(
                     body = await resp.read()
                     req_end_ns = time.perf_counter_ns()
                     end_ms = (req_end_ns - t0_ns) / 1e6
-                    latency_ms = (req_end_ns - req_start_ns) / 1e6
+                    wait_ms = start_ms - arrival_ms
+                    latency_ms = end_ms - arrival_ms  # Total latency including wait time
                     
                     # Stop the collector
                     stop_event.set()
@@ -594,6 +677,7 @@ async def send_one(
                                 start_ms=start_ms,
                                 end_ms=end_ms,
                                 latency_ms=latency_ms,
+                                wait_ms=wait_ms,
                                 qid=event.qid
                             ))
                         
@@ -601,10 +685,10 @@ async def send_one(
                         if trace_processes and per_query_dir:
                             save_query_profile_traces(per_query_dir, query_id, query_traces)
                         
-                        wait_ms = start_ms - arrival_ms
+                        exec_ms = end_ms - start_ms  # Execution time for display
                         traces_info = f" traces={len(query_traces)}" if trace_processes else ""
                         print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
-                              f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms{traces_info}")
+                              f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms{traces_info}")
                         return
                     else:
                         # Server rejected (e.g., overloaded) - clear traces and retry
@@ -630,10 +714,13 @@ async def send_one(
         print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
         await asyncio.sleep(retry_delay_ms / 1000.0)
     
-    # Max retries exceeded - record as failed with last attempt times
-    req_end_ns = time.perf_counter_ns()
-    end_ms = (req_end_ns - t0_ns) / 1e6
-    print(f"[{event.at_ms:>6} ms] {event.qid}: FAILED after {max_retries} attempts")
+    # Max retries exceeded - record as dropped
+    async with records_lock:
+        dropped_records.append(DroppedRecord(
+            arrival_ms=arrival_ms,
+            qid=event.qid
+        ))
+    print(f"[{event.at_ms:>6} ms] {event.qid}: DROPPED after {max_retries} attempts")
 
 
 async def run_schedule(
@@ -683,6 +770,7 @@ async def run_schedule(
     sem = asyncio.Semaphore(max_concurrency)
     
     latency_records: List[LatencyRecord] = []
+    dropped_records: List[DroppedRecord] = []
     records_lock = asyncio.Lock()
     
     # Initialize periodic collection (conditional based on flags)
@@ -735,6 +823,7 @@ async def run_schedule(
                     spin_ns=spin_ns,
                     sem=sem,
                     latency_records=latency_records,
+                    dropped_records=dropped_records,
                     records_lock=records_lock,
                     per_query_dir=per_query_dir,
                     query_trace_period_ms=query_trace_period_ms,
@@ -757,8 +846,8 @@ async def run_schedule(
     end_events = query_system_events(url)
 
     # Save results
-    raw_path = save_raw_data(output_dir, schedule_name, latency_records)
-    stats_path = save_statistics(output_dir, schedule_name, latency_records, qid_list)
+    raw_path = save_raw_data(output_dir, schedule_name, latency_records, dropped_records)
+    stats_path = save_statistics(output_dir, schedule_name, latency_records, dropped_records, qid_list)
     
     # Save system.events data (always saved for start/end/diff)
     start_events_path = save_system_events(output_dir, schedule_name, "start", start_events)
@@ -792,7 +881,10 @@ async def run_schedule(
     if latency_records:
         all_latencies = [r.latency_ms for r in latency_records]
         avg_latency = sum(all_latencies) / len(all_latencies)
+        print(f"  Completed queries: {len(latency_records)}")
         print(f"  Average latency: {avg_latency:.2f} ms")
+    if dropped_records:
+        print(f"  Dropped queries: {len(dropped_records)}")
 
 
 async def main():

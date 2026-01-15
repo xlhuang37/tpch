@@ -34,47 +34,12 @@ class ScheduleConfig:
 # Define all schedules to generate
 SCHEDULES: List[ScheduleConfig] = [
     # # Load Config
-    # ScheduleConfig(load=18, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    # ScheduleConfig(load=18, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
-    # ScheduleConfig(load=36 ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    # ScheduleConfig(load=36, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
-    # ScheduleConfig(load=54, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    # ScheduleConfig(load=54, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
-    # # 
-    ScheduleConfig(load=36, ratio=2.0, length=12, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=12, ratio=2.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=36, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
-    # ScheduleConfig(load=24, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
-    # ScheduleConfig(load=12, ratio=2.0, length=120, query_type="default", p_size=2400, np_size=300),
-    # # Load Config
-    # ScheduleConfig(load=36, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=24, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=12, ratio=4.0, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=36, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
-    # ScheduleConfig(load=24, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
-    # ScheduleConfig(load=12, ratio=4.0, length=120, query_type="default", p_size=1200, np_size=300),
-    # # 
-    # ScheduleConfig(load=36, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=24, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=12, ratio=4.0, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=36, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
-    # ScheduleConfig(load=24, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
-    # ScheduleConfig(load=12, ratio=4.0, length=120, query_type="default", p_size=2400, np_size=300),
-    # # Load Config
-    # ScheduleConfig(load=36, ratio=0.5, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=24, ratio=0.5, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=12, ratio=0.5, length=120, query_type="greedy", p_size=1200, np_size=300),
-    # ScheduleConfig(load=36, ratio=0.5, length=120, query_type="default", p_size=1200, np_size=300),
-    # ScheduleConfig(load=24, ratio=0.5, length=120, query_type="default", p_size=1200, np_size=300),
-    # ScheduleConfig(load=12, ratio=0.5, length=120, query_type="default", p_size=1200, np_size=300),
-    # # 
-    # ScheduleConfig(load=36, ratio=0.5, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=24, ratio=0.5, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=12, ratio=0.5, length=120, query_type="greedy", p_size=2400, np_size=300),
-    # ScheduleConfig(load=36, ratio=0.5, length=120, query_type="default", p_size=2400, np_size=300),
-    # ScheduleConfig(load=24, ratio=0.5, length=120, query_type="default", p_size=2400, np_size=300),
-    # ScheduleConfig(load=12, ratio=0.5, length=120, query_type="default", p_size=2400, np_size=300),
+    ScheduleConfig(load=16, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=16, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
+    ScheduleConfig(load=32 ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=32, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
+    ScheduleConfig(load=48, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=48, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
 ]
 
 # Directory containing query SQL files

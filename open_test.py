@@ -348,10 +348,8 @@ def save_query_profile_traces(per_query_dir: str, query_id: str,
     filepath = os.path.join(per_query_dir, filename)
     
     if not traces:
-        # Create empty file to indicate no traces were collected
-        with open(filepath, "w", newline="", encoding="utf-8") as f:
-            f.write("# No traces collected (query may have been rejected or too short)\n")
-        return filepath
+        # Skip creating file if no traces were collected
+        return ""
     
     # Collect all unique event names across all traces
     all_event_names = set()

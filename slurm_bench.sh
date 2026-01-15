@@ -8,12 +8,7 @@
 #SBATCH --mem-bind=local
 #SBATCH --sockets-per-node=1  
 
-echo "Job started on $(hostname)"
-
-srun --cpus-per-task=64 --cpu-bind=cores ./server_start.sh &
+srun --overlap --cpus-per-task=64 --cpu-bind=cores ./server_start.sh &
 sleep 10
-srun --cpus-per-task=4  --cpu-bind=cores python open_test.py
+srun --overlap --cpus-per-task=4  --cpu-bind=cores python open_test.py
 
-
-echo "Test finished. Stopping server..."
-kill $SERVER_SRUN_PID

@@ -34,10 +34,12 @@ class ScheduleConfig:
 # Define all schedules to generate
 SCHEDULES: List[ScheduleConfig] = [
     # # Load Config
-    ScheduleConfig(load=12, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=12, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
-    ScheduleConfig(load=24, ratio=1.0, length=7200, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=24, ratio=1.0, length=7200, query_type="default", p_size=140, np_size=58),
+    ScheduleConfig(load=9, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=9, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
+    ScheduleConfig(load=15, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=15, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
+    ScheduleConfig(load=18, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=18, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
 ]
 
 # Directory containing query SQL files

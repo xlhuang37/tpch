@@ -2,8 +2,8 @@
 #SBATCH --job-name=bench_server
 #SBATCH --output=bench_%j.log
 #SBATCH --nodes=1
-#SBATCH --ntasks=1              # Corresponds to -n1
-#SBATCH --cpus-per-task=96      # Corresponds to -c96
+#SBATCH --ntasks=24            
+#SBATCH --cpus-per-task=4     
 #SBATCH --mem=320g
 #SBATCH --mem-bind=local
 #SBATCH --sockets-per-node=1    # Excellent for avoiding NUMA latency

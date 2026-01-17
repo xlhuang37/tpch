@@ -149,6 +149,8 @@ def process_query_file(query_file: str, host: str, port: int,
     with open(output_path, 'w') as f:
         for s in speedups:
             f.write(f"{s:.4f}\n")
+        # Save 1-core average runtime as indicator of query size
+        f.write(f"{avg_times[0]:.4f}\n")
     
     if verbose:
         print(f"Speedup values saved to: {output_path}")

@@ -16,7 +16,16 @@ from typing import List, Optional, Dict, Any
 
 import aiohttp
 import io
+import platform
 import urllib.request
+
+# Optional: psutil for detailed system info
+try:
+    import psutil
+    HAS_PSUTIL = True
+except ImportError:
+    HAS_PSUTIL = False
+    print("Warning: psutil not installed. Install with 'pip install psutil' for detailed system info.")
 
 
 @dataclass
@@ -60,6 +69,521 @@ class QueryProfileTrace:
     """A single trace of ProfileEvents for a query."""
     timestamp_ms: float   # Relative to query start
     profile_events: Dict[str, Any]  # ProfileEvents map
+
+
+def parse_proc_cpuinfo() -> Dict[str, Any]:
+    """Parse /proc/cpuinfo for detailed CPU information (Linux only)."""
+    cpuinfo = {}
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            content = f.read()
+        
+        # Extract key fields from first processor entry
+        lines = content.split("\n")
+        processors = []
+        current_proc = {}
+        
+        for line in lines:
+            if line.strip() == "":
+                if current_proc:
+                    processors.append(current_proc)
+                    current_proc = {}
+                continue
+            if ":" in line:
+                key, value = line.split(":", 1)
+                current_proc[key.strip()] = value.strip()
+        
+        if current_proc:
+            processors.append(current_proc)
+        
+        if processors:
+            first_proc = processors[0]
+            cpuinfo["model_name"] = first_proc.get("model name", "Unknown")
+            cpuinfo["vendor_id"] = first_proc.get("vendor_id", "Unknown")
+            cpuinfo["cpu_family"] = first_proc.get("cpu family", "Unknown")
+            cpuinfo["model"] = first_proc.get("model", "Unknown")
+            cpuinfo["stepping"] = first_proc.get("stepping", "Unknown")
+            cpuinfo["microcode"] = first_proc.get("microcode", "Unknown")
+            cpuinfo["cpu_mhz"] = first_proc.get("cpu MHz", "Unknown")
+            cpuinfo["cache_size"] = first_proc.get("cache size", "Unknown")
+            cpuinfo["flags"] = first_proc.get("flags", "")[:200] + "..."  # Truncate flags
+            cpuinfo["processor_count"] = len(processors)
+    except FileNotFoundError:
+        cpuinfo["note"] = "/proc/cpuinfo not found (not Linux?)"
+    except Exception as e:
+        cpuinfo["error"] = str(e)
+    
+    return cpuinfo
+
+
+def parse_proc_meminfo() -> Dict[str, Any]:
+    """Parse /proc/meminfo for detailed memory information (Linux only)."""
+    meminfo = {}
+    try:
+        with open("/proc/meminfo", "r") as f:
+            for line in f:
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    key = key.strip()
+                    value = value.strip()
+                    # Store key memory fields
+                    if key in ["MemTotal", "MemFree", "MemAvailable", "Buffers", "Cached",
+                               "SwapTotal", "SwapFree", "HugePages_Total", "Hugepagesize"]:
+                        meminfo[key] = value
+    except FileNotFoundError:
+        meminfo["note"] = "/proc/meminfo not found (not Linux?)"
+    except Exception as e:
+        meminfo["error"] = str(e)
+    
+    return meminfo
+
+
+def get_disk_device_info() -> List[Dict[str, Any]]:
+    """Get disk device brand/model information from /sys/block (Linux only)."""
+    devices = []
+    try:
+        block_path = "/sys/block"
+        if not os.path.exists(block_path):
+            return [{"note": "/sys/block not found (not Linux?)"}]
+        
+        for device_name in os.listdir(block_path):
+            # Skip loop devices, ram disks, etc.
+            if device_name.startswith(("loop", "ram", "dm-")):
+                continue
+            
+            device_info = {"name": device_name}
+            device_path = os.path.join(block_path, device_name, "device")
+            
+            # Try to read model
+            model_path = os.path.join(device_path, "model")
+            if os.path.exists(model_path):
+                try:
+                    with open(model_path, "r") as f:
+                        device_info["model"] = f.read().strip()
+                except Exception:
+                    pass
+            
+            # Try to read vendor
+            vendor_path = os.path.join(device_path, "vendor")
+            if os.path.exists(vendor_path):
+                try:
+                    with open(vendor_path, "r") as f:
+                        device_info["vendor"] = f.read().strip()
+                except Exception:
+                    pass
+            
+            # Try to read size (in 512-byte sectors)
+            size_path = os.path.join(block_path, device_name, "size")
+            if os.path.exists(size_path):
+                try:
+                    with open(size_path, "r") as f:
+                        sectors = int(f.read().strip())
+                        device_info["size_gb"] = round(sectors * 512 / (1024**3), 2)
+                except Exception:
+                    pass
+            
+            # Try to check if it's rotational (HDD) or not (SSD/NVMe)
+            rotational_path = os.path.join(block_path, device_name, "queue", "rotational")
+            if os.path.exists(rotational_path):
+                try:
+                    with open(rotational_path, "r") as f:
+                        is_rotational = f.read().strip() == "1"
+                        device_info["type"] = "HDD" if is_rotational else "SSD/NVMe"
+                except Exception:
+                    pass
+            
+            # For NVMe devices, try to get more info
+            if device_name.startswith("nvme"):
+                # Try /sys/class/nvme/nvmeX/model
+                nvme_ctrl = device_name.rstrip("0123456789").rstrip("np")
+                nvme_model_path = f"/sys/class/nvme/{nvme_ctrl}/model"
+                if os.path.exists(nvme_model_path):
+                    try:
+                        with open(nvme_model_path, "r") as f:
+                            device_info["model"] = f.read().strip()
+                    except Exception:
+                        pass
+                nvme_serial_path = f"/sys/class/nvme/{nvme_ctrl}/serial"
+                if os.path.exists(nvme_serial_path):
+                    try:
+                        with open(nvme_serial_path, "r") as f:
+                            device_info["serial"] = f.read().strip()
+                    except Exception:
+                        pass
+            
+            if len(device_info) > 1:  # Has more than just the name
+                devices.append(device_info)
+        
+    except Exception as e:
+        devices.append({"error": str(e)})
+    
+    return devices
+
+
+def get_dmi_info() -> Dict[str, Any]:
+    """Get system DMI information (motherboard, BIOS, etc.) from /sys/class/dmi (Linux only)."""
+    dmi = {}
+    dmi_path = "/sys/class/dmi/id"
+    
+    try:
+        if not os.path.exists(dmi_path):
+            return {"note": "/sys/class/dmi/id not found"}
+        
+        fields = ["sys_vendor", "product_name", "product_version", "board_vendor", 
+                  "board_name", "board_version", "bios_vendor", "bios_version", "bios_date"]
+        
+        for field in fields:
+            field_path = os.path.join(dmi_path, field)
+            if os.path.exists(field_path):
+                try:
+                    with open(field_path, "r") as f:
+                        dmi[field] = f.read().strip()
+                except PermissionError:
+                    dmi[field] = "(permission denied)"
+                except Exception:
+                    pass
+    except Exception as e:
+        dmi["error"] = str(e)
+    
+    return dmi
+
+
+def get_hardware_specs() -> Dict[str, Any]:
+    """Collect CPU, memory, and disk specifications."""
+    specs = {
+        "timestamp": datetime.now().isoformat(),
+        "platform": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "version": platform.version(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "python_version": platform.python_version(),
+        }
+    }
+    
+    # Parse /proc files for detailed Linux info
+    specs["proc_cpuinfo"] = parse_proc_cpuinfo()
+    specs["proc_meminfo"] = parse_proc_meminfo()
+    specs["disk_devices"] = get_disk_device_info()
+    specs["dmi_info"] = get_dmi_info()
+    
+    if HAS_PSUTIL:
+        # CPU info
+        try:
+            cpu_freq = psutil.cpu_freq()
+            specs["cpu"] = {
+                "physical_cores": psutil.cpu_count(logical=False),
+                "logical_cores": psutil.cpu_count(logical=True),
+                "max_frequency_mhz": cpu_freq.max if cpu_freq else None,
+                "min_frequency_mhz": cpu_freq.min if cpu_freq else None,
+            }
+        except Exception as e:
+            specs["cpu"] = {"error": str(e)}
+        
+        # Memory info
+        try:
+            mem = psutil.virtual_memory()
+            specs["memory"] = {
+                "total_gb": round(mem.total / (1024**3), 2),
+                "available_gb": round(mem.available / (1024**3), 2),
+            }
+        except Exception as e:
+            specs["memory"] = {"error": str(e)}
+        
+        # Disk info
+        try:
+            disk = psutil.disk_usage('/')
+            specs["disk"] = {
+                "total_gb": round(disk.total / (1024**3), 2),
+                "free_gb": round(disk.free / (1024**3), 2),
+                "used_gb": round(disk.used / (1024**3), 2),
+            }
+            # Try to get disk partitions
+            partitions = []
+            for part in psutil.disk_partitions():
+                try:
+                    usage = psutil.disk_usage(part.mountpoint)
+                    partitions.append({
+                        "device": part.device,
+                        "mountpoint": part.mountpoint,
+                        "fstype": part.fstype,
+                        "total_gb": round(usage.total / (1024**3), 2),
+                    })
+                except Exception:
+                    pass
+            specs["disk"]["partitions"] = partitions
+        except Exception as e:
+            specs["disk"] = {"error": str(e)}
+    else:
+        specs["cpu"] = {"note": "psutil not installed"}
+        specs["memory"] = {"note": "psutil not installed"}
+        specs["disk"] = {"note": "psutil not installed"}
+    
+    return specs
+
+
+def get_system_state() -> Dict[str, Any]:
+    """Collect current system state (CPU usage, memory usage, etc.) to detect interference."""
+    state = {
+        "timestamp": datetime.now().isoformat(),
+    }
+    
+    if HAS_PSUTIL:
+        # CPU usage (sample over 1 second for accuracy)
+        try:
+            cpu_percent = psutil.cpu_percent(interval=1)
+            cpu_percent_per_core = psutil.cpu_percent(interval=0.1, percpu=True)
+            state["cpu"] = {
+                "usage_percent": cpu_percent,
+                "usage_per_core_percent": cpu_percent_per_core,
+            }
+        except Exception as e:
+            state["cpu"] = {"error": str(e)}
+        
+        # Memory usage
+        try:
+            mem = psutil.virtual_memory()
+            swap = psutil.swap_memory()
+            state["memory"] = {
+                "total_gb": round(mem.total / (1024**3), 2),
+                "available_gb": round(mem.available / (1024**3), 2),
+                "used_gb": round(mem.used / (1024**3), 2),
+                "usage_percent": mem.percent,
+                "swap_total_gb": round(swap.total / (1024**3), 2),
+                "swap_used_gb": round(swap.used / (1024**3), 2),
+                "swap_percent": swap.percent,
+            }
+        except Exception as e:
+            state["memory"] = {"error": str(e)}
+        
+        # Disk I/O counters (baseline)
+        try:
+            disk_io = psutil.disk_io_counters()
+            if disk_io:
+                state["disk_io"] = {
+                    "read_bytes": disk_io.read_bytes,
+                    "write_bytes": disk_io.write_bytes,
+                    "read_count": disk_io.read_count,
+                    "write_count": disk_io.write_count,
+                }
+        except Exception as e:
+            state["disk_io"] = {"error": str(e)}
+        
+        # Network I/O counters (baseline)
+        try:
+            net_io = psutil.net_io_counters()
+            if net_io:
+                state["network_io"] = {
+                    "bytes_sent": net_io.bytes_sent,
+                    "bytes_recv": net_io.bytes_recv,
+                }
+        except Exception as e:
+            state["network_io"] = {"error": str(e)}
+        
+        # Top processes by memory/CPU (potential interference sources)
+        try:
+            processes = []
+            for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
+                try:
+                    pinfo = proc.info
+                    if pinfo['cpu_percent'] > 1.0 or pinfo['memory_percent'] > 1.0:
+                        processes.append({
+                            "pid": pinfo['pid'],
+                            "name": pinfo['name'],
+                            "cpu_percent": round(pinfo['cpu_percent'], 1),
+                            "memory_percent": round(pinfo['memory_percent'], 1),
+                        })
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            # Sort by CPU usage and take top 10
+            processes.sort(key=lambda x: x['cpu_percent'], reverse=True)
+            state["top_processes"] = processes[:10]
+        except Exception as e:
+            state["top_processes"] = {"error": str(e)}
+        
+        # Load average (Unix only)
+        try:
+            load_avg = psutil.getloadavg()
+            state["load_average"] = {
+                "1min": round(load_avg[0], 2),
+                "5min": round(load_avg[1], 2),
+                "15min": round(load_avg[2], 2),
+            }
+        except (AttributeError, OSError):
+            # Windows doesn't have getloadavg
+            state["load_average"] = {"note": "not available on this platform"}
+    else:
+        state["note"] = "psutil not installed - limited system state info"
+    
+    return state
+
+
+def save_hardware_specs(output_dir: str) -> str:
+    """Save hardware specifications to a file in the output directory."""
+    import json
+    
+    system_info_dir = os.path.join(output_dir, "system_info")
+    os.makedirs(system_info_dir, exist_ok=True)
+    
+    specs = get_hardware_specs()
+    filepath = os.path.join(system_info_dir, "hardware_specs.json")
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(specs, f, indent=2)
+    
+    # Also save a human-readable text version
+    txt_filepath = os.path.join(system_info_dir, "hardware_specs.txt")
+    with open(txt_filepath, "w", encoding="utf-8") as f:
+        f.write("=" * 60 + "\n")
+        f.write("HARDWARE SPECIFICATIONS\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Recorded at: {specs['timestamp']}\n\n")
+        
+        # System/DMI Info
+        dmi = specs.get("dmi_info", {})
+        if dmi and "note" not in dmi and "error" not in dmi:
+            f.write("SYSTEM INFO (DMI)\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"  Vendor:      {dmi.get('sys_vendor', 'N/A')}\n")
+            f.write(f"  Product:     {dmi.get('product_name', 'N/A')}\n")
+            f.write(f"  Version:     {dmi.get('product_version', 'N/A')}\n")
+            f.write(f"  Board:       {dmi.get('board_vendor', 'N/A')} {dmi.get('board_name', 'N/A')}\n")
+            f.write(f"  BIOS:        {dmi.get('bios_vendor', 'N/A')} {dmi.get('bios_version', 'N/A')} ({dmi.get('bios_date', 'N/A')})\n")
+            f.write("\n")
+        
+        f.write("PLATFORM\n")
+        f.write("-" * 40 + "\n")
+        for k, v in specs.get("platform", {}).items():
+            f.write(f"  {k}: {v}\n")
+        f.write("\n")
+        
+        # CPU Info from /proc/cpuinfo
+        proc_cpu = specs.get("proc_cpuinfo", {})
+        if proc_cpu and "note" not in proc_cpu and "error" not in proc_cpu:
+            f.write("CPU (from /proc/cpuinfo)\n")
+            f.write("-" * 40 + "\n")
+            f.write(f"  Model:       {proc_cpu.get('model_name', 'N/A')}\n")
+            f.write(f"  Vendor:      {proc_cpu.get('vendor_id', 'N/A')}\n")
+            f.write(f"  CPU Family:  {proc_cpu.get('cpu_family', 'N/A')}\n")
+            f.write(f"  Stepping:    {proc_cpu.get('stepping', 'N/A')}\n")
+            f.write(f"  Microcode:   {proc_cpu.get('microcode', 'N/A')}\n")
+            f.write(f"  MHz:         {proc_cpu.get('cpu_mhz', 'N/A')}\n")
+            f.write(f"  Cache:       {proc_cpu.get('cache_size', 'N/A')}\n")
+            f.write(f"  Processors:  {proc_cpu.get('processor_count', 'N/A')}\n")
+            f.write("\n")
+        
+        f.write("CPU (from psutil)\n")
+        f.write("-" * 40 + "\n")
+        for k, v in specs.get("cpu", {}).items():
+            f.write(f"  {k}: {v}\n")
+        f.write("\n")
+        
+        # Memory Info from /proc/meminfo
+        proc_mem = specs.get("proc_meminfo", {})
+        if proc_mem and "note" not in proc_mem and "error" not in proc_mem:
+            f.write("MEMORY (from /proc/meminfo)\n")
+            f.write("-" * 40 + "\n")
+            for k, v in proc_mem.items():
+                f.write(f"  {k}: {v}\n")
+            f.write("\n")
+        
+        f.write("MEMORY (from psutil)\n")
+        f.write("-" * 40 + "\n")
+        for k, v in specs.get("memory", {}).items():
+            f.write(f"  {k}: {v}\n")
+        f.write("\n")
+        
+        # Disk Devices (brand/model from /sys/block)
+        disk_devices = specs.get("disk_devices", [])
+        if disk_devices and not (len(disk_devices) == 1 and ("note" in disk_devices[0] or "error" in disk_devices[0])):
+            f.write("DISK DEVICES (from /sys/block)\n")
+            f.write("-" * 40 + "\n")
+            for dev in disk_devices:
+                if "error" in dev or "note" in dev:
+                    continue
+                f.write(f"  {dev.get('name', 'N/A')}:\n")
+                if "vendor" in dev:
+                    f.write(f"    Vendor:  {dev['vendor']}\n")
+                if "model" in dev:
+                    f.write(f"    Model:   {dev['model']}\n")
+                if "serial" in dev:
+                    f.write(f"    Serial:  {dev['serial']}\n")
+                if "type" in dev:
+                    f.write(f"    Type:    {dev['type']}\n")
+                if "size_gb" in dev:
+                    f.write(f"    Size:    {dev['size_gb']} GB\n")
+            f.write("\n")
+        
+        f.write("DISK USAGE (from psutil)\n")
+        f.write("-" * 40 + "\n")
+        disk_info = specs.get("disk", {})
+        for k, v in disk_info.items():
+            if k != "partitions":
+                f.write(f"  {k}: {v}\n")
+        if "partitions" in disk_info:
+            f.write("  partitions:\n")
+            for part in disk_info["partitions"]:
+                f.write(f"    - {part.get('device', 'N/A')}: {part.get('total_gb', 'N/A')} GB "
+                       f"({part.get('fstype', 'N/A')}) at {part.get('mountpoint', 'N/A')}\n")
+    
+    return filepath
+
+
+def save_pre_run_state(output_dir: str, schedule_name: str) -> str:
+    """Save system state before a schedule run to detect interference."""
+    import json
+    
+    system_info_dir = os.path.join(output_dir, "system_info")
+    os.makedirs(system_info_dir, exist_ok=True)
+    
+    state = get_system_state()
+    filepath = os.path.join(system_info_dir, f"{schedule_name}_pre_run_state.json")
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(state, f, indent=2)
+    
+    # Also save a human-readable text version
+    txt_filepath = os.path.join(system_info_dir, f"{schedule_name}_pre_run_state.txt")
+    with open(txt_filepath, "w", encoding="utf-8") as f:
+        f.write("=" * 60 + "\n")
+        f.write(f"PRE-RUN SYSTEM STATE: {schedule_name}\n")
+        f.write("=" * 60 + "\n\n")
+        f.write(f"Recorded at: {state['timestamp']}\n\n")
+        
+        f.write("CPU USAGE\n")
+        f.write("-" * 40 + "\n")
+        cpu_info = state.get("cpu", {})
+        if "usage_percent" in cpu_info:
+            f.write(f"  Overall: {cpu_info['usage_percent']}%\n")
+        if "usage_per_core_percent" in cpu_info:
+            f.write(f"  Per-core: {cpu_info['usage_per_core_percent']}\n")
+        f.write("\n")
+        
+        f.write("MEMORY USAGE\n")
+        f.write("-" * 40 + "\n")
+        mem_info = state.get("memory", {})
+        for k, v in mem_info.items():
+            f.write(f"  {k}: {v}\n")
+        f.write("\n")
+        
+        if "load_average" in state:
+            f.write("LOAD AVERAGE\n")
+            f.write("-" * 40 + "\n")
+            load_info = state.get("load_average", {})
+            for k, v in load_info.items():
+                f.write(f"  {k}: {v}\n")
+            f.write("\n")
+        
+        if "top_processes" in state and isinstance(state["top_processes"], list):
+            f.write("TOP PROCESSES (potential interference)\n")
+            f.write("-" * 40 + "\n")
+            for proc in state["top_processes"]:
+                f.write(f"  PID {proc['pid']}: {proc['name']} "
+                       f"(CPU: {proc['cpu_percent']}%, MEM: {proc['memory_percent']}%)\n")
+            f.write("\n")
+    
+    return filepath
 
 
 def compute_percentile(sorted_values: List[float], p: float) -> float:
@@ -743,6 +1267,11 @@ async def run_schedule(
     print(f"Schedule trace period: {schedule_trace_period_ms}ms, Query trace period: {query_trace_period_ms}ms")
     print(f"{'='*60}\n")
     
+    # Record pre-run system state (CPU/memory usage to detect interference)
+    print("Recording pre-run system state...")
+    pre_run_path = save_pre_run_state(output_dir, schedule_name)
+    print(f"  Pre-run state saved to: {pre_run_path}\n")
+    
     # Create per_query_events directory for this schedule
     if(trace_processes):
         print("Tracing per query events are enabled")
@@ -932,6 +1461,11 @@ async def main():
     output_dir = os.path.join("./output", timestamp)
     os.makedirs(output_dir, exist_ok=True)
     print(f"\nOutput directory: {output_dir}")
+    
+    # Save hardware specifications (once per run)
+    print("\nRecording hardware specifications...")
+    hw_specs_path = save_hardware_specs(output_dir)
+    print(f"  Hardware specs saved to: {hw_specs_path}")
 
     # Run each schedule sequentially
     for schedule_path in schedule_paths:

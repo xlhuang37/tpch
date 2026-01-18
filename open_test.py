@@ -613,7 +613,7 @@ async def send_one(
     per_query_dir: str,
     query_trace_period_ms: int,
     trace_processes: bool = False,
-    max_retries: int = 100,
+    max_retries: int = 3,
     retry_delay_ms: float = 10000,
 ) -> None:
     target_ns = t0_ns + event.at_ms * 1_000_000

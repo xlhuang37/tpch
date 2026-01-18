@@ -138,88 +138,6 @@ def parse_proc_meminfo() -> Dict[str, Any]:
     return meminfo
 
 
-def get_disk_device_info() -> List[Dict[str, Any]]:
-    """Get disk device brand/model information from /sys/block (Linux only)."""
-    devices = []
-    try:
-        block_path = "/sys/block"
-        if not os.path.exists(block_path):
-            return [{"note": "/sys/block not found (not Linux?)"}]
-        
-        for device_name in os.listdir(block_path):
-            # Skip loop devices, ram disks, etc.
-            if device_name.startswith(("loop", "ram", "dm-")):
-                continue
-            
-            device_info = {"name": device_name}
-            device_path = os.path.join(block_path, device_name, "device")
-            
-            # Try to read model
-            model_path = os.path.join(device_path, "model")
-            if os.path.exists(model_path):
-                try:
-                    with open(model_path, "r") as f:
-                        device_info["model"] = f.read().strip()
-                except Exception:
-                    pass
-            
-            # Try to read vendor
-            vendor_path = os.path.join(device_path, "vendor")
-            if os.path.exists(vendor_path):
-                try:
-                    with open(vendor_path, "r") as f:
-                        device_info["vendor"] = f.read().strip()
-                except Exception:
-                    pass
-            
-            # Try to read size (in 512-byte sectors)
-            size_path = os.path.join(block_path, device_name, "size")
-            if os.path.exists(size_path):
-                try:
-                    with open(size_path, "r") as f:
-                        sectors = int(f.read().strip())
-                        device_info["size_gb"] = round(sectors * 512 / (1024**3), 2)
-                except Exception:
-                    pass
-            
-            # Try to check if it's rotational (HDD) or not (SSD/NVMe)
-            rotational_path = os.path.join(block_path, device_name, "queue", "rotational")
-            if os.path.exists(rotational_path):
-                try:
-                    with open(rotational_path, "r") as f:
-                        is_rotational = f.read().strip() == "1"
-                        device_info["type"] = "HDD" if is_rotational else "SSD/NVMe"
-                except Exception:
-                    pass
-            
-            # For NVMe devices, try to get more info
-            if device_name.startswith("nvme"):
-                # Try /sys/class/nvme/nvmeX/model
-                nvme_ctrl = device_name.rstrip("0123456789").rstrip("np")
-                nvme_model_path = f"/sys/class/nvme/{nvme_ctrl}/model"
-                if os.path.exists(nvme_model_path):
-                    try:
-                        with open(nvme_model_path, "r") as f:
-                            device_info["model"] = f.read().strip()
-                    except Exception:
-                        pass
-                nvme_serial_path = f"/sys/class/nvme/{nvme_ctrl}/serial"
-                if os.path.exists(nvme_serial_path):
-                    try:
-                        with open(nvme_serial_path, "r") as f:
-                            device_info["serial"] = f.read().strip()
-                    except Exception:
-                        pass
-            
-            if len(device_info) > 1:  # Has more than just the name
-                devices.append(device_info)
-        
-    except Exception as e:
-        devices.append({"error": str(e)})
-    
-    return devices
-
-
 def get_dmi_info() -> Dict[str, Any]:
     """Get system DMI information (motherboard, BIOS, etc.) from /sys/class/dmi (Linux only)."""
     dmi = {}
@@ -249,7 +167,7 @@ def get_dmi_info() -> Dict[str, Any]:
 
 
 def get_hardware_specs() -> Dict[str, Any]:
-    """Collect CPU, memory, and disk specifications."""
+    """Collect CPU and memory specifications."""
     specs = {
         "timestamp": datetime.now().isoformat(),
         "platform": {
@@ -265,7 +183,6 @@ def get_hardware_specs() -> Dict[str, Any]:
     # Parse /proc files for detailed Linux info
     specs["proc_cpuinfo"] = parse_proc_cpuinfo()
     specs["proc_meminfo"] = parse_proc_meminfo()
-    specs["disk_devices"] = get_disk_device_info()
     specs["dmi_info"] = get_dmi_info()
     
     if HAS_PSUTIL:
@@ -290,35 +207,10 @@ def get_hardware_specs() -> Dict[str, Any]:
             }
         except Exception as e:
             specs["memory"] = {"error": str(e)}
-        
-        # Disk info
-        try:
-            disk = psutil.disk_usage('/')
-            specs["disk"] = {
-                "total_gb": round(disk.total / (1024**3), 2),
-                "free_gb": round(disk.free / (1024**3), 2),
-                "used_gb": round(disk.used / (1024**3), 2),
-            }
-            # Try to get disk partitions
-            partitions = []
-            for part in psutil.disk_partitions():
-                try:
-                    usage = psutil.disk_usage(part.mountpoint)
-                    partitions.append({
-                        "device": part.device,
-                        "mountpoint": part.mountpoint,
-                        "fstype": part.fstype,
-                        "total_gb": round(usage.total / (1024**3), 2),
-                    })
-                except Exception:
-                    pass
-            specs["disk"]["partitions"] = partitions
-        except Exception as e:
-            specs["disk"] = {"error": str(e)}
+
     else:
         specs["cpu"] = {"note": "psutil not installed"}
         specs["memory"] = {"note": "psutil not installed"}
-        specs["disk"] = {"note": "psutil not installed"}
     
     return specs
 
@@ -356,19 +248,7 @@ def get_system_state() -> Dict[str, Any]:
             }
         except Exception as e:
             state["memory"] = {"error": str(e)}
-        
-        # Disk I/O counters (baseline)
-        try:
-            disk_io = psutil.disk_io_counters()
-            if disk_io:
-                state["disk_io"] = {
-                    "read_bytes": disk_io.read_bytes,
-                    "write_bytes": disk_io.write_bytes,
-                    "read_count": disk_io.read_count,
-                    "write_count": disk_io.write_count,
-                }
-        except Exception as e:
-            state["disk_io"] = {"error": str(e)}
+    
         
         # Network I/O counters (baseline)
         try:
@@ -494,39 +374,6 @@ def save_hardware_specs(output_dir: str) -> str:
             f.write(f"  {k}: {v}\n")
         f.write("\n")
         
-        # Disk Devices (brand/model from /sys/block)
-        disk_devices = specs.get("disk_devices", [])
-        if disk_devices and not (len(disk_devices) == 1 and ("note" in disk_devices[0] or "error" in disk_devices[0])):
-            f.write("DISK DEVICES (from /sys/block)\n")
-            f.write("-" * 40 + "\n")
-            for dev in disk_devices:
-                if "error" in dev or "note" in dev:
-                    continue
-                f.write(f"  {dev.get('name', 'N/A')}:\n")
-                if "vendor" in dev:
-                    f.write(f"    Vendor:  {dev['vendor']}\n")
-                if "model" in dev:
-                    f.write(f"    Model:   {dev['model']}\n")
-                if "serial" in dev:
-                    f.write(f"    Serial:  {dev['serial']}\n")
-                if "type" in dev:
-                    f.write(f"    Type:    {dev['type']}\n")
-                if "size_gb" in dev:
-                    f.write(f"    Size:    {dev['size_gb']} GB\n")
-            f.write("\n")
-        
-        f.write("DISK USAGE (from psutil)\n")
-        f.write("-" * 40 + "\n")
-        disk_info = specs.get("disk", {})
-        for k, v in disk_info.items():
-            if k != "partitions":
-                f.write(f"  {k}: {v}\n")
-        if "partitions" in disk_info:
-            f.write("  partitions:\n")
-            for part in disk_info["partitions"]:
-                f.write(f"    - {part.get('device', 'N/A')}: {part.get('total_gb', 'N/A')} GB "
-                       f"({part.get('fstype', 'N/A')}) at {part.get('mountpoint', 'N/A')}\n")
-    
     return filepath
 
 

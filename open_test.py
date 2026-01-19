@@ -1088,8 +1088,9 @@ async def send_one(
                 sem.release()
         
         # Wait before retry (outside sem to not block others)
-        print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
-        await asyncio.sleep(retry_delay_ms / 1000.0)
+        if attempt < max_attempts:
+            print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
+            await asyncio.sleep(retry_delay_ms / 1000.0)
     
     # Max retries exceeded - record as dropped
     async with records_lock:

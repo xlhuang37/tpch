@@ -969,6 +969,122 @@ def generate_query_id(qid: str, at_ms: int) -> str:
     return f"{qid}_{at_ms}_{unique_suffix}"
 
 
+class ConnectionLostError(Exception):
+    """Raised when TCP connection to ClickHouse is lost."""
+    pass
+
+
+async def _cleanup_collector(stop_event: asyncio.Event, collector_task: Optional[asyncio.Task]) -> None:
+    """Stop and await the collector task, ignoring any errors."""
+    stop_event.set()
+    if collector_task:
+        try:
+            await collector_task
+        except Exception:
+            pass
+
+
+async def _try_send_one(
+    session: aiohttp.ClientSession,
+    query_url: str,
+    sql_bytes: bytes,
+    query_id: str,
+    event: Event,
+    arrival_ms: float,
+    t0_ns: int,
+    latency_records: List[LatencyRecord],
+    records_lock: asyncio.Lock,
+    per_query_dir: Optional[str],
+    query_trace_period_ms: int,
+    trace_processes: bool,
+    url: str,
+    attempt: int,
+    connection_lost_event: Optional[asyncio.Event],
+) -> bool:
+    """
+    Try to execute a single query attempt.
+    Returns True on success, False to retry.
+    Raises ConnectionLostError on connection failure.
+    """
+    # Initialize per-query trace collection
+    query_traces: List[QueryProfileTrace] = []
+    query_traces_lock = asyncio.Lock()
+    stop_event = asyncio.Event()
+    collector_task = None
+    
+    try:
+        req_start_ns = time.perf_counter_ns()
+        start_ms = (req_start_ns - t0_ns) / 1e6
+        
+        # Start profile events collector for this query (conditional)
+        if trace_processes:
+            collector_task = asyncio.create_task(
+                query_profile_collector(
+                    url=url,
+                    query_id=query_id,
+                    period_ms=query_trace_period_ms,
+                    traces=query_traces,
+                    traces_lock=query_traces_lock,
+                    query_start_ns=req_start_ns,
+                    stop_event=stop_event,
+                )
+            )
+        
+        async with session.post(query_url, data=sql_bytes) as resp:
+            body = await resp.read()
+            req_end_ns = time.perf_counter_ns()
+            end_ms = (req_end_ns - t0_ns) / 1e6
+            wait_ms = start_ms - arrival_ms
+            latency_ms = end_ms - arrival_ms
+            
+            # Stop the collector on success
+            await _cleanup_collector(stop_event, collector_task)
+            collector_task = None  # Mark as cleaned up
+
+            if resp.status == 200:
+                # Success - record and save traces
+                async with records_lock:
+                    latency_records.append(LatencyRecord(
+                        arrival_ms=arrival_ms,
+                        start_ms=start_ms,
+                        end_ms=end_ms,
+                        latency_ms=latency_ms,
+                        wait_ms=wait_ms,
+                        qid=event.qid
+                    ))
+                
+                if trace_processes and per_query_dir:
+                    save_query_profile_traces(per_query_dir, query_id, query_traces)
+                
+                exec_ms = end_ms - start_ms
+                traces_info = f" traces={len(query_traces)}" if trace_processes else ""
+                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
+                      f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms{traces_info}")
+                return True
+            else:
+                # Server rejected - retry
+                snippet = body[:200].decode("utf-8", errors="replace")
+                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
+                      f"(attempt {attempt+1}) - retrying... resp='{snippet}'")
+                return False
+                
+    except Exception as e:
+        # Cleanup collector on any exception
+        await _cleanup_collector(stop_event, collector_task)
+        
+        # Check if it's a connection error
+        if isinstance(e, (aiohttp.ServerDisconnectedError, aiohttp.ClientConnectorError, aiohttp.ClientOSError)):
+            if connection_lost_event and not connection_lost_event.is_set():
+                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): CONNECTION LOST - {e}")
+                connection_lost_event.set()
+            raise ConnectionLostError(str(e)) from e
+        
+        # Other errors - log and retry
+        print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): ERROR {e} "
+              f"(attempt {attempt+1}) - retrying...")
+        return False
+
+
 async def send_one(
     session: aiohttp.ClientSession,
     url: str,
@@ -986,119 +1102,63 @@ async def send_one(
     trace_processes: bool = False,
     max_attempts: int = 1,
     retry_delay_ms: float = 10000,
+    connection_lost_event: Optional[asyncio.Event] = None,
 ) -> None:
+    """Execute a query at its scheduled time with retry logic."""
     target_ns = t0_ns + event.at_ms * 1_000_000
     await wait_until_ns(target_ns, spin_ns)
 
-    # Record actual arrival time (relative to t0)
     arrival_ns = time.perf_counter_ns()
     arrival_ms = (arrival_ns - t0_ns) / 1e6
 
-    for attempt in range(max_attempts):
-        # Generate unique query ID for this attempt
-        query_id = generate_query_id(event.qid, event.at_ms)
-        
-        # Prepare URL with query_id and workload parameters
-        query_url = f"{url.rstrip('/')}/?query_id={query_id}"
-        if workload:
-            query_url += f"&workload={workload}"
-        
-        # Initialize per-query trace collection
-        query_traces: List[QueryProfileTrace] = []
-        query_traces_lock = asyncio.Lock()
-        stop_event = asyncio.Event()
-        collector_task = None
-        
-        # Semaphore is used to track how much wait is generated by the max_concurrency limit of TCPConnector. 
-        # Without semaphore, the wait is inside TCPConnector and is not tracked.
-        if sem:
-            await sem.acquire()
-        try:
-            req_start_ns = time.perf_counter_ns()
-            start_ms = (req_start_ns - t0_ns) / 1e6
+    try:
+        for attempt in range(max_attempts):
+            query_id = generate_query_id(event.qid, event.at_ms)
+            query_url = f"{url.rstrip('/')}/?query_id={query_id}"
+            if workload:
+                query_url += f"&workload={workload}"
             
-            # Start profile events collector for this query (conditional)
-            if trace_processes:
-                collector_task = asyncio.create_task(
-                    query_profile_collector(
-                        url=url,
-                        query_id=query_id,
-                        period_ms=query_trace_period_ms,
-                        traces=query_traces,
-                        traces_lock=query_traces_lock,
-                        query_start_ns=req_start_ns,
-                        stop_event=stop_event,
-                    )
-                )
-            
-            async with session.post(query_url, data=sql_bytes) as resp:
-                body = await resp.read()
-                req_end_ns = time.perf_counter_ns()
-                end_ms = (req_end_ns - t0_ns) / 1e6
-                wait_ms = start_ms - arrival_ms
-                latency_ms = end_ms - arrival_ms  # Total latency including wait time
-                
-                # Stop the collector
-                stop_event.set()
-                if collector_task:
-                    await collector_task
-
-                if resp.status == 200:
-                    # Success - record and save traces
-                    async with records_lock:
-                        latency_records.append(LatencyRecord(
-                            arrival_ms=arrival_ms,
-                            start_ms=start_ms,
-                            end_ms=end_ms,
-                            latency_ms=latency_ms,
-                            wait_ms=wait_ms,
-                            qid=event.qid
-                        ))
-                    
-                    # Save query profile traces (only if tracing is enabled)
-                    if trace_processes and per_query_dir:
-                        save_query_profile_traces(per_query_dir, query_id, query_traces)
-                    
-                    exec_ms = end_ms - start_ms  # Execution time for display
-                    traces_info = f" traces={len(query_traces)}" if trace_processes else ""
-                    print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
-                          f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms{traces_info}")
-                    return
-                else:
-                    # Server rejected (e.g., overloaded) - clear traces and retry
-                    query_traces.clear()  # Clear traces on rejection
-                    snippet = body[:200].decode("utf-8", errors="replace")
-                    print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
-                          f"(attempt {attempt+1}) - traces cleared, retrying... resp='{snippet}'")
-                    
-        except Exception as e:
-            # Stop the collector on exception
-            stop_event.set()
-            if collector_task:
-                try:
-                    await collector_task
-                except Exception:
-                    pass
-            # Clear traces on error
-            query_traces.clear()
-            print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): ERROR {e} "
-                  f"(attempt {attempt+1}) - traces cleared, retrying...")
-        finally:
             if sem:
-                sem.release()
+                await sem.acquire()
+            try:
+                success = await _try_send_one(
+                    session=session,
+                    query_url=query_url,
+                    sql_bytes=sql_bytes,
+                    query_id=query_id,
+                    event=event,
+                    arrival_ms=arrival_ms,
+                    t0_ns=t0_ns,
+                    latency_records=latency_records,
+                    records_lock=records_lock,
+                    per_query_dir=per_query_dir,
+                    query_trace_period_ms=query_trace_period_ms,
+                    trace_processes=trace_processes,
+                    url=url,
+                    attempt=attempt,
+                    connection_lost_event=connection_lost_event,
+                )
+                if success:
+                    return
+            finally:
+                if sem:
+                    sem.release()
+            
+            # Wait before retry
+            if attempt < max_attempts - 1:
+                print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
+                await asyncio.sleep(retry_delay_ms / 1000.0)
         
-        # Wait before retry (outside sem to not block others)
-        if attempt < max_attempts:
-            print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
-            await asyncio.sleep(retry_delay_ms / 1000.0)
+        # Max retries exceeded
+        async with records_lock:
+            dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
+        print(f"[{event.at_ms:>6} ms] {event.qid}: DROPPED after {max_attempts} attempts")
     
-    # Max retries exceeded - record as dropped
-    async with records_lock:
-        dropped_records.append(DroppedRecord(
-            arrival_ms=arrival_ms,
-            qid=event.qid
-        ))
-    print(f"[{event.at_ms:>6} ms] {event.qid}: DROPPED after {max_attempts} attempts")
+    except (asyncio.CancelledError, ConnectionLostError):
+        # Task cancelled or connection lost - record as dropped
+        async with records_lock:
+            dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
+        raise
 
 
 async def run_schedule(
@@ -1156,6 +1216,7 @@ async def run_schedule(
     latency_records: List[LatencyRecord] = []
     dropped_records: List[DroppedRecord] = []
     records_lock = asyncio.Lock()
+    connection_lost_event = asyncio.Event()  # Signals when TCP connection is lost
     
     # Initialize periodic collection (conditional based on flags)
     schedule_events_traces: List[ScheduleEventsTrace] = []
@@ -1212,11 +1273,38 @@ async def run_schedule(
                     per_query_dir=per_query_dir,
                     query_trace_period_ms=query_trace_period_ms,
                     trace_processes=trace_processes,
+                    connection_lost_event=connection_lost_event,
                 )
             )
             for e in events
         ]
-        await asyncio.gather(*tasks)
+        
+        # Monitor task that cancels all query tasks when connection is lost
+        async def cancel_on_connection_loss():
+            await connection_lost_event.wait()
+            cancelled_count = 0
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+                    cancelled_count += 1
+            if cancelled_count > 0:
+                print(f"\n*** Connection lost - cancelled {cancelled_count} pending queries ***")
+        
+        cancel_task = asyncio.create_task(cancel_on_connection_loss())
+        
+        try:
+            # return_exceptions=True prevents CancelledError from propagating
+            await asyncio.gather(*tasks, return_exceptions=True)
+        finally:
+            cancel_task.cancel()
+            try:
+                await cancel_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Report connection loss status
+        if connection_lost_event.is_set():
+            print(f"\n*** WARNING: Schedule terminated early due to connection loss ***")
     
     # Stop the periodic collectors
     schedule_stop_event.set()

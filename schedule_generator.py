@@ -38,12 +38,12 @@ SCHEDULES: List[ScheduleConfig] = [
     #ScheduleConfig(load=12, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
     #ScheduleConfig(load=16, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
     #ScheduleConfig(load=16, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
-    ScheduleConfig(load=28, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=28, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
-    ScheduleConfig(load=32, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=32, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
-    ScheduleConfig(load=36, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
-    ScheduleConfig(load=36, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
+    #ScheduleConfig(load=29, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
+    #ScheduleConfig(load=30, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
+    #ScheduleConfig(load=31, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
+    #ScheduleConfig(load=33, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
+    #ScheduleConfig(load=34, ratio=1.0, length=3600, query_type="greedy", p_size=140, np_size=58),
+    ScheduleConfig(load=64, ratio=1.0, length=3600, query_type="default", p_size=140, np_size=58),
     ]
 
 # Directory containing query SQL files

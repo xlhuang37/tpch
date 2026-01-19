@@ -1,0 +1,4 @@
+arrival_ms,start_ms,end_ms,latency_ms,wait_ms,qid
+381.2898,DROPPED,DROPPED,DROPPED,DROPPED,np_greedy_58
+1025.9158,DROPPED,DROPPED,DROPPED,DROPPED,np_greedy_58
+4727.0065,DROPPED,DROPPED,DROPPED,DROPPED,np_greedy_58

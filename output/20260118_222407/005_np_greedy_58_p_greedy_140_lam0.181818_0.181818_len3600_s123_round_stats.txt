@@ -1,0 +1,18 @@
+Statistics for schedule: 005_np_greedy_58_p_greedy_140_lam0.181818_0.181818_len3600_s123_round
+Total completed queries: 0
+Total dropped queries: 1325
+============================================================
+
+DROPPED QUERIES
+----------------------------------------
+  np_greedy_58: 668
+  p_greedy_140: 657
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_greedy_58:
+    Dropped:  668
+
+  p_greedy_140:
+    Dropped:  657

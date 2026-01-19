@@ -1,0 +1,140 @@
+event,start_value,end_value,diff,description
+AnalyzePatchRangesMicroseconds,2244215,2474028,229813,Total time spent analyzing index of patch parts
+ArenaAllocBytes,355467264,591396864,235929600,Number of bytes allocated for memory Arena (used for GROUP BY and similar operations)
+ArenaAllocChunks,86784,144384,57600,Number of chunks allocated for memory Arena (used for GROUP BY and similar operations)
+AsyncLoaderWaitMicroseconds,2330453,2330453,0,Total time a query was waiting for async loader jobs.
+AsyncLoggingConsoleTotalMessages,54,54,0,How many messages (accepted or dropped) have been sent to the async queue for the console log
+AsyncLoggingErrorFileLogTotalMessages,3,3,0,How many messages (accepted or dropped) have been sent to the async queue for the error file log
+AsyncLoggingFileLogTotalMessages,54,54,0,How many messages (accepted or dropped) have been sent to the async queue for the file log
+CommonBackgroundExecutorTaskExecuteStepMicroseconds,383252,496083,112831,Time spent in executeStep() for Common executor tasks.
+CommonBackgroundExecutorTaskResetMicroseconds,387,532,145,Time spent resetting task for Common executor.
+CompileExpressionsBytes,16384,16384,0,Number of bytes used for expressions compilation.
+CompileExpressionsMicroseconds,52470,52470,0,Total time spent for compilation of expressions to LLVM code.
+CompileFunction,2,2,0,Number of times a compilation of generated LLVM code (to create fused function for complex expressions) was initiated.
+CompressedReadBufferBlocks,592825348,987309446,394484098,"Number of compressed blocks (the blocks of data that are compressed independent of each other) read from compressed sources (files, network)."
+CompressedReadBufferBytes,39062418445412,65056489132248,25994070686836,"Number of uncompressed bytes (the number of bytes after decompression) read from compressed sources (files, network)."
+ConcurrencyControlDownscales,30518,70275,39757,Total number of CPU downscaling events
+ConcurrencyControlPreemptedMicroseconds,10954145118,46116937369,35162792251,Total time a query was waiting due to preemption of CPU slots.
+ConcurrencyControlPreemptions,284613,1351932,1067319,Total number of CPU preemptions
+ConcurrencyControlSlotsAcquired,30518,70275,39757,Total number of CPU slots acquired
+ConcurrencyControlUpscales,30518,70275,39757,Total number of CPU upscaling events
+ConcurrencyControlWaitMicroseconds,5833662720,45842043657,40008380937,Total time a query was waiting on resource requests for CPU slots.
+ConcurrentQuerySlotsAcquired,456,1356,900,Total number of query slots acquired
+ConcurrentQueryWaitMicroseconds,16398,53234,36836,Total time a query was waiting for a query slots
+ContextLock,2361032,3916752,1555720,Number of times the lock of Context was acquired or tried to acquire. This is global lock.
+ContextLockWaitMicroseconds,1702728,1745659,42931,Context lock wait time in microseconds
+CreatedReadBufferOrdinary,808553,1346420,537867,Number of times ordinary read buffer was created for reading data (while choosing among other read methods).
+DiskReadElapsedMicroseconds,9003723176,14311962840,5308239664,Total time spent waiting for read syscall. This include reads from page cache.
+DiskWriteElapsedMicroseconds,10,10,0,Total time spent waiting for write syscall. This include writes to page cache.
+FairPolicyDequeue,8303949,25393271,17089322,Number of dequeues invoked at all FairPolicyNodes
+FileOpen,2496,3561,1065,Number of files opened.
+FilteringMarksWithPrimaryKeyMicroseconds,10553,15489,4936,Time spent filtering parts by PK.
+FunctionExecute,200501851,333835501,133333650,"Number of SQL ordinary function calls (SQL functions are called on per-block basis, so this number represents the number of blocks)."
+GlobalThreadPoolExpansions,8538,8538,0,Counts the total number of times new threads have been added to the global thread pool. This metric indicates the frequency of expansions in the global thread pool to accommodate increased processing demands.
+GlobalThreadPoolJobWaitTimeMicroseconds,205978055,213008683,7030628,"Measures the elapsed time from when a job is scheduled in the thread pool to when it is picked up for execution by a worker thread. This metric helps identify delays in job processing, indicating the responsiveness of the thread pool to new tasks."
+GlobalThreadPoolJobs,97963,134884,36921,Counts the number of jobs that have been pushed to the global thread pool.
+GlobalThreadPoolLockWaitMicroseconds,7420149,7864536,444387,Total time threads have spent waiting for locks in the global thread pool.
+GlobalThreadPoolShrinks,6800,6800,0,"Counts the total number of times the global thread pool has shrunk by removing threads. This occurs when the number of idle threads exceeds max_thread_pool_free_size, indicating adjustments in the global thread pool size in response to decreased thread utilization."
+GlobalThreadPoolThreadCreationMicroseconds,26917941,26917941,0,Total time spent waiting for new threads to start.
+HTTPServerConnectionsCreated,435,652,217,Number of created server HTTP connections
+HTTPServerConnectionsExpired,9,10,1,Number of expired server HTTP connections.
+HTTPServerConnectionsPreserved,1356,2255,899,Number of preserved server HTTP connections. Connection kept alive successfully
+HTTPServerConnectionsReset,4,5,1,Number of reset server HTTP connections. Server closes connection
+HTTPServerConnectionsReused,1351,2250,899,Number of reused server HTTP connections
+HardPageFaults,10,10,0,"The number of hard page faults in query execution threads. High values indicate either that you forgot to turn off swap on your server, or eviction of memory pages of the ClickHouse binary during very high memory pressure, or successful usage of the 'mmap' read method for the tables data."
+IOBufferAllocBytes,185946497280,309495431019,123548933739,Number of bytes allocated for IO buffers (for ReadBuffer/WriteBuffer).
+IOBufferAllocs,1631170,2716185,1085015,Number of allocations of IO buffers (for ReadBuffer/WriteBuffer).
+InitialQuery,1361,2262,901,"Same as Query, but only counts initial queries (see is_initial_query)."
+InterfaceHTTPReceiveBytes,1438814,2427866,989052,Number of bytes received through HTTP interfaces
+InterfaceHTTPSendBytes,1578933,2603459,1024526,Number of bytes sent through HTTP interfaces
+JoinBuildTableRowCount,2692,4492,1800,Total number of rows in the build table for a JOIN operation.
+JoinOptimizeMicroseconds,5667922,6498451,830529,Total time spent executing JOIN plan optimizations.
+JoinProbeTableRowCount,398146361877,664366068927,266219707050,Total number of rows in the probe table for a JOIN operation.
+JoinReorderMicroseconds,15626,19789,4163,Total time spent executing JOIN reordering algorithm.
+JoinResultRowCount,1592585447508,2657464275708,1064878828200,Total number of rows in the result of a JOIN operation.
+LoadedDataParts,17,17,0,Number of data parts loaded by MergeTree tables during initialization.
+LoadedDataPartsMicroseconds,2535410,2535410,0,Microseconds spent by MergeTree tables for loading data parts during initialization.
+LoadedMarksCount,807301,807301,0,Number of marks loaded (total across columns).
+LoadedMarksFiles,22,22,0,Number of mark files loaded.
+LoadedMarksMemoryBytes,3652160,3652160,0,Size of in-memory representations of loaded marks.
+LocalThreadPoolBusyMicroseconds,5883287821614,6490710272249,607422450635,Total time threads have spent executing the actual work.
+LocalThreadPoolExpansions,96013,132033,36020,Counts the total number of times threads have been borrowed from the global thread pool to expand local thread pools.
+LocalThreadPoolJobWaitTimeMicroseconds,2736483964,4041024055,1304540091,"Measures the elapsed time from when a job is scheduled in the thread pool to when it is picked up for execution by a worker thread. This metric helps identify delays in job processing, indicating the responsiveness of the thread pool to new tasks."
+LocalThreadPoolJobs,96011090,161540610,65529520,Counts the number of jobs that have been pushed to the local thread pools.
+LocalThreadPoolLockWaitMicroseconds,20866073455,21318782187,452708732,Total time threads have spent waiting for locks in the local thread pools.
+LocalThreadPoolShrinks,95865,131878,36013,Counts the total number of times threads have been returned to the global thread pool from local thread pools.
+LocalThreadPoolThreadCreationMicroseconds,158460244,164566958,6106714,Total time local thread pools have spent waiting to borrow a thread from the global pool.
+LogDebug,1,1,0,Number of log messages with level Debug
+LogInfo,49,49,0,Number of log messages with level Info
+LogWarning,3,3,0,Number of log messages with level Warning
+LoggerElapsedNanoseconds,6788936,6788936,0,Cumulative time spend in logging
+MainConfigLoads,1,1,0,Number of times the main configuration was reloaded.
+MarkCacheHits,808322,1346189,537867,"Number of times an entry has been found in the mark cache, so we didn't have to load a mark file."
+MarkCacheMisses,22,22,0,"Number of times an entry has not been found in the mark cache, so we had to load a mark file in memory, which is a costly operation, adding to query latency."
+MemoryAllocatorPurge,1,1,0,Total number of times memory allocator purge was requested
+MemoryAllocatorPurgeTimeMicroseconds,1673,1673,0,Total time spent for memory allocator purge
+MemoryWorkerRun,186349,257435,71086,Number of runs done by MemoryWorker in background
+MemoryWorkerRunElapsedMicroseconds,120146196,184699639,64553443,Total time spent by MemoryWorker for background work
+MergerMutatorPartsInRangesForMergeCount,932,1034,102,Amount of candidate parts for merge
+MergerMutatorPrepareRangesForMergeElapsedMicroseconds,1411,1677,266,Time spent to prepare parts ranges which can be merged according to merge predicate.
+MergerMutatorRangesForMergeCount,602,668,66,Amount of candidate ranges for merge
+MergerMutatorSelectPartsForMergeElapsedMicroseconds,3649,4222,573,Time spent to select parts from ranges which can be merged.
+MergerMutatorsGetPartsForMergeElapsedMicroseconds,16632,18085,1453,Time spent to take data parts snapshot to build ranges from them.
+MergingSortedMilliseconds,451570,818262,366692,Total time spent while merging sorted columns
+NetworkReceiveBytes,1438814,2427866,989052,"Total number of bytes received from network. Only ClickHouse-related network interaction is included, not by 3rd party libraries."
+NetworkReceiveElapsedMicroseconds,82529,114632,32103,"Total time spent waiting for data to receive or receiving data from network. Only ClickHouse-related network interaction is included, not by 3rd party libraries."
+NetworkSendBytes,1578933,2603459,1024526,"Total number of bytes send to network. Only ClickHouse-related network interaction is included, not by 3rd party libraries."
+NetworkSendElapsedMicroseconds,234882,393389,158507,"Total time spent waiting for data to send to network or sending data to network. Only ClickHouse-related network interaction is included, not by 3rd party libraries."
+OSCPUVirtualTimeMicroseconds,279006345207,451715100744,172708755537,CPU time spent seen by OS. Does not include involuntary waits due to virtualization.
+OSCPUWaitMicroseconds,604123551149,625931035131,21807483982,"Total time a thread was ready for execution but waiting to be scheduled by OS, from the OS point of view."
+OSReadBytes,610652160,610652160,0,"Number of bytes read from disks or block devices. Doesn't include bytes read from page cache. May include excessive data due to block size, readahead, etc."
+OSReadChars,12046685242269,20259967726300,8213282484031,"Number of bytes read from filesystem, including page cache, as well as network and other files."
+OSWriteChars,10880,18088,7208,"Number of bytes written to filesystem, including page cache, as well as network and other files."
+OpenedFileCacheHits,806270,1343132,536862,"Number of times a file has been found in the opened file cache, so we didn't have to open it again."
+OpenedFileCacheMicroseconds,1904549,2782405,877856,Amount of time spent executing OpenedFileCache methods.
+OpenedFileCacheMisses,2257,3262,1005,"Number of times a file has been found in the opened file cache, so we had to open it again."
+PartsLockHoldMicroseconds,2530547,2530649,102,Total time spent holding data parts lock in MergeTree tables
+PartsLockWaitMicroseconds,2,2,0,Total time spent waiting for data parts lock in MergeTree tables
+PartsLocks,556,629,73,Number of times data parts lock has been acquired for MergeTree tables
+QueriesWithSubqueries,3390,5641,2251,Count queries with all subqueries
+Query,1361,2262,901,"Number of queries to be interpreted and potentially executed. Does not include queries that failed to parse or were rejected due to AST size limits, quota limits or limits on the number of simultaneously running queries. May include internal queries initiated by ClickHouse itself. Does not count subqueries."
+QueryConditionCacheHits,2708,4508,1800,Number of times an entry has been found in the query condition cache (and reading of marks can be skipped). Only updated for SELECT queries with SETTING use_query_condition_cache = 1.
+QueryConditionCacheMisses,2716,4516,1800,Number of times an entry has not been found in the query condition cache (and reading of mark cannot be skipped). Only updated for SELECT queries with SETTING use_query_condition_cache = 1.
+QueryPlanOptimizeMicroseconds,7314766,8715377,1400611,Total time spent executing query plan optimizations.
+QueryTimeMicroseconds,96380790541,138187161934,41806371393,Total time of all queries.
+RWLockAcquiredReadLocks,3331,5198,1867,Number of times a read lock was acquired (in a heavy RWLock).
+RWLockReadersWaitMilliseconds,9,17,8,Total time spent waiting for a read lock to be acquired (in a heavy RWLock).
+ReadBufferFromFileDescriptorRead,3117224,4312276,1195052,Number of reads (read/pread) from a file descriptor. Does not include sockets.
+ReadBufferFromFileDescriptorReadBytes,12001450750710,20182122496248,8180671745538,"Number of bytes read from file descriptors. If the file is compressed, this will show the compressed data size."
+ReadCompressedBytes,11900307573888,19837245708172,7936938134284,"Number of bytes (the number of bytes before decompression) read from compressed sources (files, network)."
+RealTimeMicroseconds,6072251011246,6761152564059,688901552813,Total (wall clock) time spent in processing (queries and other tasks) threads (note that this is a sum).
+RecomputeWeight,3907,8235,4328,Number of weight recomputes triggered at all FairPolicyNodes
+RowsReadByMainReader,813651395112,1353685506912,540034111800,Number of rows read from MergeTree tables by the main reader (after PREWHERE step).
+RowsReadByPrewhereReaders,813651395112,1353685506912,540034111800,Number of rows read from MergeTree tables (in total) by prewhere readers.
+SchedulerNodeUpdate,1824,5422,3598,Number of SchedulerNodeInfo update due to query starting in the GREEDY module.
+Seek,186349,257435,71086,Number of times the 'lseek' function was called.
+SelectQueriesWithSubqueries,3390,5641,2251,Count SELECT queries with all subqueries
+SelectQuery,1361,2262,901,"Same as Query, but only for SELECT queries."
+SelectQueryTimeMicroseconds,96380790541,138187161934,41806371393,Total time of SELECT queries.
+SelectedBytes,39031265535080,64952902934341,25921637399261,Number of bytes (uncompressed; for columns as they stored in memory) SELECTed from all tables.
+SelectedMarks,99515484,165565584,66050100,Number of marks (index granules) selected to read from a MergeTree table.
+SelectedMarksTotal,99515484,165565584,66050100,Number of total marks (index granules) before selecting which ones to read from a MergeTree table.
+SelectedParts,2712,4512,1800,Number of data parts selected to read from a MergeTree table.
+SelectedPartsTotal,2712,4512,1800,Number of total data parts before selecting which ones to read from a MergeTree table.
+SelectedRanges,2712,4512,1800,Number of (non-adjacent) ranges in all data parts selected to read from a MergeTree table.
+SelectedRows,813651398290,1353685512029,540034113739,Number of rows SELECTed from all tables.
+ServerStartupMilliseconds,2527,2527,0,Time elapsed from starting server to listening to sockets in milliseconds
+SharedPartsLockHoldMicroseconds,138491,206958,68467,Total time spent holding shared data parts lock in MergeTree tables
+SharedPartsLockWaitMicroseconds,2094,3707,1613,Total time spent waiting for shared data parts lock in MergeTree tables
+SharedPartsLocks,215174,298012,82838,Number of times shared data parts lock has been acquired for MergeTree tables
+SoftPageFaults,842477373,1227270736,384793363,"The number of soft page faults in query execution threads. Soft page fault usually means a miss in the memory allocator cache, which requires a new memory mapping from the OS and subsequent allocation of a page of physical memory."
+SynchronousReadWaitMicroseconds,209731017949,228228613444,18497595495,Time spent in waiting for synchronous reads in asynchronous local read.
+SystemTimeMicroseconds,9199350785,14738257889,5538907104,"Total time spent in processing (queries and other tasks) threads executing CPU instructions in OS kernel mode. This is time spent in syscalls, excluding waiting time during blocking syscalls."
+ThreadPoolReaderPageCacheHitElapsedMicroseconds,566306892,752717059,186410167,Time spent reading data from page cache in ThreadPoolReader.
+ThreadPoolReaderPageCacheMiss,95910673,161392332,65481659,Number of times the read inside ThreadPoolReader was not done from page cache and was hand off to thread pool.
+ThreadPoolReaderPageCacheMissBytes,11991941876810,20168964619149,8177022742339,Number of bytes read inside ThreadPoolReader when read was not done from page cache and was hand off to thread pool.
+ThreadPoolReaderPageCacheMissElapsedMicroseconds,7974358606,12974731408,5000372802,Time spent reading data inside the asynchronous job in ThreadPoolReader - when read was not done from the page cache.
+UserTimeMicroseconds,269802970405,436972192183,167169221778,"Total time spent in processing (queries and other tasks) threads executing CPU instructions in user mode. This includes time CPU pipeline was stalled due to main memory access, cache misses, branch mispredictions, hyper-threading, etc."
+WaitMarksLoadMicroseconds,14555804,18938094,4382290,Time spent loading marks
+WriteBufferFromFileDescriptorWrite,1,1,0,Number of writes (write/pwrite) to a file descriptor. Does not include sockets.
+WriteBufferFromFileDescriptorWriteBytes,60,60,0,"Number of bytes written to file descriptors. If the file is compressed, this will show compressed data size."

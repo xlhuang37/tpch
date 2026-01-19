@@ -1000,6 +1000,7 @@ async def _try_send_one(
     url: str,
     attempt: int,
     connection_lost_event: Optional[asyncio.Event],
+    terminate_upon_drop: bool = False,
 ) -> bool:
     """
     Try to execute a single query attempt.
@@ -1062,8 +1063,14 @@ async def _try_send_one(
                       f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms{traces_info}")
                 return True
             else:
-                # Server rejected - retry
+                # Server rejected - retry or terminate
                 snippet = body[:200].decode("utf-8", errors="replace")
+                if terminate_upon_drop:
+                    print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
+                          f"- terminate_upon_drop=True, terminating... resp='{snippet}'")
+                    if connection_lost_event and not connection_lost_event.is_set():
+                        connection_lost_event.set()
+                    raise ConnectionLostError(f"HTTP {resp.status}: {snippet}") 
                 print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
                       f"(attempt {attempt+1}) - retrying... resp='{snippet}'")
                 return False
@@ -1103,6 +1110,7 @@ async def send_one(
     max_attempts: int = 1,
     retry_delay_ms: float = 10000,
     connection_lost_event: Optional[asyncio.Event] = None,
+    terminate_upon_drop: bool = False,
 ) -> None:
     """Execute a query at its scheduled time with retry logic."""
     target_ns = t0_ns + event.at_ms * 1_000_000
@@ -1137,6 +1145,7 @@ async def send_one(
                     url=url,
                     attempt=attempt,
                     connection_lost_event=connection_lost_event,
+                    terminate_upon_drop=terminate_upon_drop,
                 )
                 if success:
                     return
@@ -1174,6 +1183,7 @@ async def run_schedule(
     trace_processes: bool = False,
     trace_metrics: bool = False,
     use_semaphore: bool = False,
+    terminate_upon_drop: bool = False,
 ) -> None:
     """Run a single schedule and save results."""
     schedule_name = os.path.splitext(os.path.basename(schedule_path))[0]
@@ -1274,6 +1284,7 @@ async def run_schedule(
                     query_trace_period_ms=query_trace_period_ms,
                     trace_processes=trace_processes,
                     connection_lost_event=connection_lost_event,
+                    terminate_upon_drop=terminate_upon_drop,
                 )
             )
             for e in events
@@ -1379,6 +1390,8 @@ async def main():
                     help="Enable periodic tracing of system.processes ProfileEvents per query (default: False)")
     ap.add_argument("--trace-metrics", action="store_true", default=False,
                     help="Enable periodic tracing of system.metrics (default: False)")
+    ap.add_argument("--terminate-upon-drop", action="store_false", default=True,
+                    help="Terminate the run immediately if any query is rejected by server (default: False)")
     args = ap.parse_args()
     
     # Derive use_semaphore from max_concurrency: if limited, use semaphore to track wait time explicitly
@@ -1403,6 +1416,7 @@ async def main():
     print(f"  Trace system.metrics: {args.trace_metrics}")
     print(f"  Schedule trace period: {args.schedule_trace_period_ms}ms")
     print(f"  Query trace period: {args.query_trace_period_ms}ms")
+    print(f"  Terminate upon drop: {args.terminate_upon_drop}")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1430,6 +1444,7 @@ async def main():
             trace_processes=args.trace_processes,
             trace_metrics=args.trace_metrics,
             use_semaphore=args.use_semaphore,
+            terminate_upon_drop=args.terminate_upon_drop,
         )
 
     print(f"\n{'='*60}")

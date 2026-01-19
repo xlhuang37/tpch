@@ -7,6 +7,7 @@
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
   <max_server_memory_usage>309237645312</max_server_memory_usage>
   <cpu_slot_preemption>true</cpu_slot_preemption>
+  <max_thread_pool_size>50000</max_thread_pool_size>
 
   <!-- ===== Networking (local only) ===== -->
   <listen_host>127.0.0.1</listen_host>

@@ -1,0 +1,58 @@
+============================================================
+HARDWARE SPECIFICATIONS
+============================================================
+
+Recorded at: 2026-01-19T17:11:48.545791
+
+SYSTEM INFO (DMI)
+----------------------------------------
+  Vendor:      Dell Inc.
+  Product:     PowerEdge R7625
+  Version:     
+  Board:       Dell Inc. 06444F
+  BIOS:        Dell Inc. 1.15.3 (10/29/2025)
+
+PLATFORM
+----------------------------------------
+  system: Linux
+  release: 5.14.0-611.16.1.el9_7.x86_64
+  version: #1 SMP PREEMPT_DYNAMIC Sun Dec 7 05:52:24 EST 2025
+  machine: x86_64
+  processor: x86_64
+  python_version: 3.9.25
+
+CPU (from /proc/cpuinfo)
+----------------------------------------
+  Model:       AMD EPYC 9654 96-Core Processor
+  Vendor:      AuthenticAMD
+  CPU Family:  25
+  Stepping:    1
+  Microcode:   0xa101158
+  MHz:         3699.985
+  Cache:       1024 KB
+  Processors:  384
+
+CPU (from psutil)
+----------------------------------------
+  physical_cores: 192
+  logical_cores: 384
+  max_frequency_mhz: 0.0
+  min_frequency_mhz: 0.0
+
+MEMORY (from /proc/meminfo)
+----------------------------------------
+  MemTotal: 1584168076 kB
+  MemFree: 181057444 kB
+  MemAvailable: 1500380372 kB
+  Buffers: 10912 kB
+  Cached: 1354214000 kB
+  SwapTotal: 4194300 kB
+  SwapFree: 4193532 kB
+  HugePages_Total: 0
+  Hugepagesize: 2048 kB
+
+MEMORY (from psutil)
+----------------------------------------
+  total_gb: 1510.78
+  available_gb: 1430.85
+

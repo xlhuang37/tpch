@@ -1,0 +1,57 @@
+Statistics for schedule: 001_np_default_58_p_default_140_lam0.111111_0.111111_len3600_s123_round
+Total completed queries: 2
+Total dropped queries: 23
+============================================================
+
+DROPPED QUERIES
+----------------------------------------
+  np_default_58: 13
+  p_default_140: 10
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    2
+  Average:  31611.6544 ms
+  Min:      25198.2687 ms
+  Max:      38025.0401 ms
+  P50:      31611.6544 ms
+  P90:      36742.3629 ms
+  P95:      37383.7015 ms
+  P99:      37896.7724 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    2
+  Average:  0.0570 ms
+  Min:      0.0557 ms
+  Max:      0.0582 ms
+  P50:      0.0570 ms
+  P90:      0.0579 ms
+  P95:      0.0580 ms
+  P99:      0.0581 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_default_58:
+    Dropped:  13
+
+  p_default_140:
+    Dropped:  10
+    Completed: 2
+    Latency:
+      Average:  31611.6544 ms
+      Min:      25198.2687 ms
+      Max:      38025.0401 ms
+      P50:      31611.6544 ms
+      P90:      36742.3629 ms
+      P95:      37383.7015 ms
+      P99:      37896.7724 ms
+    Wait Time:
+      Average:  0.0570 ms
+      Min:      0.0557 ms
+      Max:      0.0582 ms
+      P50:      0.0570 ms
+      P90:      0.0579 ms
+      P95:      0.0580 ms
+      P99:      0.0581 ms

@@ -1000,7 +1000,7 @@ async def _try_send_one(
     url: str,
     attempt: int,
     connection_lost_event: Optional[asyncio.Event],
-    terminate_upon_drop: bool = False,
+    continue_upon_drop: bool = False,
 ) -> bool:
     """
     Try to execute a single query attempt.
@@ -1065,9 +1065,9 @@ async def _try_send_one(
             else:
                 # Server rejected - retry or terminate
                 snippet = body[:200].decode("utf-8", errors="replace")
-                if terminate_upon_drop:
+                if continue_upon_drop:
                     print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
-                          f"- terminate_upon_drop=True, terminating... resp='{snippet}'")
+                          f"- continue_upon_drop=True, terminating... resp='{snippet}'")
                     if connection_lost_event and not connection_lost_event.is_set():
                         connection_lost_event.set()
                     raise ConnectionLostError(f"HTTP {resp.status}: {snippet}") 
@@ -1116,7 +1116,7 @@ async def execute_query(
     trace_processes: bool = False,
     overload_event: Optional[asyncio.Event] = None,
     connection_lost_event: Optional[asyncio.Event] = None,
-    terminate_upon_drop: bool = False,
+    continue_upon_drop: bool = False,
 ) -> QueryResult:
     """
     Execute a query immediately (no timing wait - caller handles scheduling).
@@ -1146,7 +1146,7 @@ async def execute_query(
             url=url,
             attempt=0,
             connection_lost_event=connection_lost_event,
-            terminate_upon_drop=terminate_upon_drop,
+            continue_upon_drop=continue_upon_drop,
         )
         if success:
             return QueryResult(success=True, server_overloaded=False, event=event)
@@ -1182,7 +1182,7 @@ async def run_schedule(
     trace_events: bool = False,
     trace_processes: bool = False,
     trace_metrics: bool = False,
-    terminate_upon_drop: bool = False,
+    continue_upon_drop: bool = False,
 ) -> None:
     """Run a single schedule and save results."""
     schedule_name = os.path.splitext(os.path.basename(schedule_path))[0]
@@ -1342,7 +1342,7 @@ async def run_schedule(
                     trace_processes=trace_processes,
                     overload_event=overload_event,
                     connection_lost_event=connection_lost_event,
-                    terminate_upon_drop=terminate_upon_drop,
+                    continue_upon_drop=continue_upon_drop,
                 )
             )
             in_flight.add(task)
@@ -1430,7 +1430,7 @@ async def main():
                     help="Enable periodic tracing of system.processes ProfileEvents per query (default: False)")
     ap.add_argument("--trace-metrics", action="store_true", default=False,
                     help="Enable periodic tracing of system.metrics (default: False)")
-    ap.add_argument("--terminate-upon-drop", action="store_false", default=True,
+    ap.add_argument("--continue-upon-drop", action="store_true", default=false,
                     help="Terminate the run immediately if any query is rejected by server (default: False)")
     args = ap.parse_args()
 
@@ -1453,7 +1453,7 @@ async def main():
     print(f"  Trace system.metrics: {args.trace_metrics}")
     print(f"  Schedule trace period: {args.schedule_trace_period_ms}ms")
     print(f"  Query trace period: {args.query_trace_period_ms}ms")
-    print(f"  Terminate upon drop: {args.terminate_upon_drop}")
+    print(f"  Terminate upon drop: {args.continue_upon_drop}")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -1480,7 +1480,7 @@ async def main():
             trace_events=args.trace_events,
             trace_processes=args.trace_processes,
             trace_metrics=args.trace_metrics,
-            terminate_upon_drop=args.terminate_upon_drop,
+            continue_upon_drop=args.continue_upon_drop,
         )
 
     print(f"\n{'='*60}")

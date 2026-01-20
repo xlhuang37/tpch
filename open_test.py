@@ -1431,7 +1431,7 @@ async def main():
     ap.add_argument("--trace-metrics", action="store_true", default=False,
                     help="Enable periodic tracing of system.metrics (default: False)")
     ap.add_argument("--continue-upon-drop", action="store_true", default=false,
-                    help="Terminate the run immediately if any query is rejected by server (default: False)")
+                    help="If set to true, will not terminate the run immediately if any query is rejected by server (default: False)")
     args = ap.parse_args()
 
     # Discover all CSV files in the schedules directory
@@ -1453,7 +1453,7 @@ async def main():
     print(f"  Trace system.metrics: {args.trace_metrics}")
     print(f"  Schedule trace period: {args.schedule_trace_period_ms}ms")
     print(f"  Query trace period: {args.query_trace_period_ms}ms")
-    print(f"  Terminate upon drop: {args.continue_upon_drop}")
+    print(f"  Continue upon drop: {args.continue_upon_drop}")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

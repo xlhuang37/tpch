@@ -1,8 +1,8 @@
 <clickhouse>
   <!-- ===== Storage locations (all under your base dir) ===== -->
-  <path>/work/users/x/i/xiaolong/runtime/data/</path>
-  <tmp_path>/work/users/x/i/xiaolong/runtime/tmp/</tmp_path>
-  <user_files_path>/work/users/x/i/xiaolong/runtime/user_files/</user_files_path>
+  <path>../runtime/data/</path>
+  <tmp_path>../runtime/tmp/</tmp_path>
+  <user_files_path>../runtime/user_files/</user_files_path>
 
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
   <max_server_memory_usage>268435456000</max_server_memory_usage>
@@ -18,8 +18,8 @@
   <!-- ===== Logging ===== -->
   <logger>
     <level>information</level>
-    <log>/work/users/x/i/xiaolong/runtime/logs/server.log</log>
-    <errorlog>/work/users/x/i/xiaolong/runtime/logs/error.log</errorlog>
+    <log>../runtime/logs/server.log</log>
+    <errorlog>../runtime/logs/error.log</errorlog>
     <size>100M</size>
     <count>10</count>
   </logger>

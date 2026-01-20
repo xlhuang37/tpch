@@ -63,7 +63,7 @@ def measure_speedup(
     query: str,
     max_threads: int,
     repeat: int,
-    warmup: int = 1,
+    warmup: int = 3,
     verbose: bool = True
 ) -> Tuple[List[float], List[float], List[List[float]]]:
     """

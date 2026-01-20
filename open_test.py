@@ -1092,79 +1092,79 @@ async def _try_send_one(
         return False
 
 
-async def send_one(
+@dataclass
+class QueryResult:
+    """Result of a query execution."""
+    success: bool
+    server_overloaded: bool  # True if server rejected due to overload
+    event: Event
+
+
+async def execute_query(
     session: aiohttp.ClientSession,
     url: str,
     event: Event,
     sql_bytes: bytes,
     workload: Optional[str],
     t0_ns: int,
-    spin_ns: int,
-    sem: Optional[asyncio.Semaphore],
+    arrival_ns: int,
     latency_records: List[LatencyRecord],
     dropped_records: List[DroppedRecord],
     records_lock: asyncio.Lock,
-    per_query_dir: str,
+    per_query_dir: Optional[str],
     query_trace_period_ms: int,
     trace_processes: bool = False,
-    max_attempts: int = 1,
-    retry_delay_ms: float = 10000,
+    overload_event: Optional[asyncio.Event] = None,
     connection_lost_event: Optional[asyncio.Event] = None,
     terminate_upon_drop: bool = False,
-) -> None:
-    """Execute a query at its scheduled time with retry logic."""
-    target_ns = t0_ns + event.at_ms * 1_000_000
-    await wait_until_ns(target_ns, spin_ns)
-
-    arrival_ns = time.perf_counter_ns()
+) -> QueryResult:
+    """
+    Execute a query immediately (no timing wait - caller handles scheduling).
+    Returns QueryResult indicating success/failure and overload status.
+    """
     arrival_ms = (arrival_ns - t0_ns) / 1e6
-
+    
+    query_id = generate_query_id(event.qid, event.at_ms)
+    query_url = f"{url.rstrip('/')}/?query_id={query_id}"
+    if workload:
+        query_url += f"&workload={workload}"
+    
     try:
-        for attempt in range(max_attempts):
-            query_id = generate_query_id(event.qid, event.at_ms)
-            query_url = f"{url.rstrip('/')}/?query_id={query_id}"
-            if workload:
-                query_url += f"&workload={workload}"
+        success = await _try_send_one(
+            session=session,
+            query_url=query_url,
+            sql_bytes=sql_bytes,
+            query_id=query_id,
+            event=event,
+            arrival_ms=arrival_ms,
+            t0_ns=t0_ns,
+            latency_records=latency_records,
+            records_lock=records_lock,
+            per_query_dir=per_query_dir,
+            query_trace_period_ms=query_trace_period_ms,
+            trace_processes=trace_processes,
+            url=url,
+            attempt=0,
+            connection_lost_event=connection_lost_event,
+            terminate_upon_drop=terminate_upon_drop,
+        )
+        if success:
+            return QueryResult(success=True, server_overloaded=False, event=event)
+        else:
+            # Server rejected - signal overload
+            if overload_event and not overload_event.is_set():
+                overload_event.set()
+            async with records_lock:
+                dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
+            return QueryResult(success=False, server_overloaded=True, event=event)
             
-            if sem:
-                await sem.acquire()
-            try:
-                success = await _try_send_one(
-                    session=session,
-                    query_url=query_url,
-                    sql_bytes=sql_bytes,
-                    query_id=query_id,
-                    event=event,
-                    arrival_ms=arrival_ms,
-                    t0_ns=t0_ns,
-                    latency_records=latency_records,
-                    records_lock=records_lock,
-                    per_query_dir=per_query_dir,
-                    query_trace_period_ms=query_trace_period_ms,
-                    trace_processes=trace_processes,
-                    url=url,
-                    attempt=attempt,
-                    connection_lost_event=connection_lost_event,
-                    terminate_upon_drop=terminate_upon_drop,
-                )
-                if success:
-                    return
-            finally:
-                if sem:
-                    sem.release()
-            
-            # Wait before retry
-            if attempt < max_attempts - 1:
-                print(f"[{event.at_ms:>6} ms] {event.qid}: waiting {retry_delay_ms/1000:.1f}s before retry...")
-                await asyncio.sleep(retry_delay_ms / 1000.0)
-        
-        # Max retries exceeded
+    except ConnectionLostError:
         async with records_lock:
             dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
-        print(f"[{event.at_ms:>6} ms] {event.qid}: DROPPED after {max_attempts} attempts")
-    
-    except (asyncio.CancelledError, ConnectionLostError):
-        # Task cancelled or connection lost - record as dropped
+        if overload_event and not overload_event.is_set():
+            overload_event.set()
+        raise
+    except asyncio.CancelledError:
         async with records_lock:
             dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
         raise
@@ -1182,7 +1182,6 @@ async def run_schedule(
     trace_events: bool = False,
     trace_processes: bool = False,
     trace_metrics: bool = False,
-    use_semaphore: bool = False,
     terminate_upon_drop: bool = False,
 ) -> None:
     """Run a single schedule and save results."""
@@ -1219,9 +1218,8 @@ async def run_schedule(
             sql_cache[e.qid] = load_query(queries_dir, e.qid)
             qid_list.append(e.qid)
 
-    connector = aiohttp.TCPConnector(limit=max_concurrency, ttl_dns_cache=300)
+    connector = aiohttp.TCPConnector(limit=max_concurrency if max_concurrency > 0 else 0, ttl_dns_cache=300)
     timeout = aiohttp.ClientTimeout(total=None)  # let queries run; adjust if desired
-    sem = asyncio.Semaphore(max_concurrency) if use_semaphore else None
     
     latency_records: List[LatencyRecord] = []
     dropped_records: List[DroppedRecord] = []
@@ -1265,53 +1263,95 @@ async def run_schedule(
             )
         )
     
+    # Overload handling: pause dispatch for 10 seconds when overload is detected
+    overload_event = asyncio.Event()
+    overload_pause_seconds = 10.0
+    
     async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
-        tasks = [
-            asyncio.create_task(
-                send_one(
+        in_flight: set = set()  # Track in-flight query tasks
+        
+        # Helper to process completed tasks and check for overload
+        async def process_completed_tasks(done_tasks: set) -> bool:
+            """Process completed tasks. Returns True if overload was detected."""
+            overload_detected = False
+            for task in done_tasks:
+                in_flight.discard(task)
+                try:
+                    result = task.result()
+                    if isinstance(result, QueryResult) and result.server_overloaded:
+                        overload_detected = True
+                except (asyncio.CancelledError, ConnectionLostError):
+                    overload_detected = True
+                except Exception:
+                    pass
+            return overload_detected
+        
+        # Sequential dispatch loop - process events in arrival order
+        for event in events:
+            # Check if connection was lost - stop dispatching
+            if connection_lost_event.is_set():
+                print(f"[{event.at_ms:>6} ms] {event.qid}: Skipping due to connection loss")
+                async with records_lock:
+                    arrival_ms = (time.perf_counter_ns() - t0_ns) / 1e6
+                    dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
+                continue
+            
+            # Wait until scheduled arrival time
+            target_ns = t0_ns + event.at_ms * 1_000_000
+            await wait_until_ns(target_ns, spin_ns)
+            
+            # Record actual arrival time
+            arrival_ns = time.perf_counter_ns()
+            
+            # Check for overload signal and pause if needed
+            if overload_event.is_set():
+                print(f"\n*** Server overload detected - pausing dispatch for {overload_pause_seconds:.0f}s ***")
+                await asyncio.sleep(overload_pause_seconds)
+                overload_event.clear()
+                print(f"*** Resuming dispatch ***\n")
+            
+            # If at max concurrency, wait for a task to complete (FIFO - next in line gets the slot)
+            while max_concurrency > 0 and len(in_flight) >= max_concurrency:
+                if not in_flight:
+                    break
+                done, _ = await asyncio.wait(in_flight, return_when=asyncio.FIRST_COMPLETED)
+                await process_completed_tasks(done)
+                
+                # Check for overload after processing
+                if overload_event.is_set():
+                    print(f"\n*** Server overload detected - pausing dispatch for {overload_pause_seconds:.0f}s ***")
+                    await asyncio.sleep(overload_pause_seconds)
+                    overload_event.clear()
+                    print(f"*** Resuming dispatch ***\n")
+            
+            # Dispatch the query
+            task = asyncio.create_task(
+                execute_query(
                     session=session,
                     url=url,
-                    event=e,
-                    sql_bytes=sql_cache[e.qid][0],
-                    workload=sql_cache[e.qid][1],
+                    event=event,
+                    sql_bytes=sql_cache[event.qid][0],
+                    workload=sql_cache[event.qid][1],
                     t0_ns=t0_ns,
-                    spin_ns=spin_ns,
-                    sem=sem,
+                    arrival_ns=arrival_ns,
                     latency_records=latency_records,
                     dropped_records=dropped_records,
                     records_lock=records_lock,
                     per_query_dir=per_query_dir,
                     query_trace_period_ms=query_trace_period_ms,
                     trace_processes=trace_processes,
+                    overload_event=overload_event,
                     connection_lost_event=connection_lost_event,
                     terminate_upon_drop=terminate_upon_drop,
                 )
             )
-            for e in events
-        ]
+            in_flight.add(task)
         
-        # Monitor task that cancels all query tasks when connection is lost
-        async def cancel_on_connection_loss():
-            await connection_lost_event.wait()
-            cancelled_count = 0
-            for task in tasks:
-                if not task.done():
-                    task.cancel()
-                    cancelled_count += 1
-            if cancelled_count > 0:
-                print(f"\n*** Connection lost - cancelled {cancelled_count} pending queries ***")
-        
-        cancel_task = asyncio.create_task(cancel_on_connection_loss())
-        
-        try:
-            # return_exceptions=True prevents CancelledError from propagating
-            await asyncio.gather(*tasks, return_exceptions=True)
-        finally:
-            cancel_task.cancel()
-            try:
-                await cancel_task
-            except asyncio.CancelledError:
-                pass
+        # Wait for all remaining in-flight queries to complete
+        if in_flight:
+            print(f"\nWaiting for {len(in_flight)} in-flight queries to complete...")
+            done, _ = await asyncio.wait(in_flight, return_when=asyncio.ALL_COMPLETED)
+            await process_completed_tasks(done)
         
         # Report connection loss status
         if connection_lost_event.is_set():
@@ -1393,9 +1433,6 @@ async def main():
     ap.add_argument("--terminate-upon-drop", action="store_false", default=True,
                     help="Terminate the run immediately if any query is rejected by server (default: False)")
     args = ap.parse_args()
-    
-    # Derive use_semaphore from max_concurrency: if limited, use semaphore to track wait time explicitly
-    args.use_semaphore = args.max_concurrency > 0
 
     # Discover all CSV files in the schedules directory
     schedule_pattern = os.path.join(args.schedules_dir, "*.csv")
@@ -1409,8 +1446,8 @@ async def main():
     for p in schedule_paths:
         print(f"  - {os.path.basename(p)}")
     print(f"\nConfiguration:")
-    print(f"  Max concurrency: {args.max_concurrency}")
-    print(f"  Use semaphore: {args.use_semaphore}")
+    print(f"  Max concurrency: {args.max_concurrency} (0 = unlimited)")
+    print(f"  Dispatch mode: Sequential with FIFO ordering")
     print(f"  Trace system.events: {args.trace_events}")
     print(f"  Trace system.processes: {args.trace_processes}")
     print(f"  Trace system.metrics: {args.trace_metrics}")
@@ -1443,7 +1480,6 @@ async def main():
             trace_events=args.trace_events,
             trace_processes=args.trace_processes,
             trace_metrics=args.trace_metrics,
-            use_semaphore=args.use_semaphore,
             terminate_upon_drop=args.terminate_upon_drop,
         )
 

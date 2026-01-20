@@ -1430,7 +1430,7 @@ async def main():
                     help="Enable periodic tracing of system.processes ProfileEvents per query (default: False)")
     ap.add_argument("--trace-metrics", action="store_true", default=False,
                     help="Enable periodic tracing of system.metrics (default: False)")
-    ap.add_argument("--continue-upon-drop", action="store_true", default=false,
+    ap.add_argument("--continue-upon-drop", action="store_true", default=False,
                     help="If set to true, will not terminate the run immediately if any query is rejected by server (default: False)")
     args = ap.parse_args()
 

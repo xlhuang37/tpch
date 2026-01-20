@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the CSV file
-df = pd.read_csv('004_np_default_58_p_default_140_lam0.080808_0.080808_len3600_s123_round_raw.csv')
+df = pd.read_csv('/Users/xiaolonghuang/Desktop/ClickHouse/tpch/output/20260119_081505/001_np_greedy_58_p_greedy_140_lam0.141414_0.141414_len3600_s123_round_raw.csv')
 
 # Filter out DROPPED rows (convert to numeric, coercing errors to NaN, then drop NaN)
 df['latency_ms'] = pd.to_numeric(df['latency_ms'], errors='coerce')
@@ -12,8 +12,18 @@ df = df.dropna(subset=['latency_ms'])
 df = df.sort_values('arrival_ms').reset_index(drop=True)
 
 # Compute EMA with different spans
-span = 20  # Adjust this for smoothing (higher = smoother)
-df['ema_latency'] = df['latency_ms'].ewm(span=span, adjust=False).mean()
+span = 50  # decay_factor = 2 / (span + 1), 
+# higher decay factor, more weight on recent data
+
+# Use average of first 'span' values as starting point for EMA
+initial_avg = df['latency_ms'].iloc[:span].mean()
+
+# Compute EMA manually with average as starting value
+alpha = 2 / (span + 1)
+ema_values = [initial_avg]
+for val in df['latency_ms'].iloc[1:]:
+    ema_values.append(alpha * val + (1 - alpha) * ema_values[-1])
+df['ema_latency'] = ema_values
 
 # Create the plot
 plt.figure(figsize=(12, 6))

@@ -94,10 +94,12 @@ class InFlightQuery:
 
 
 @dataclass
-class QueryExecutionResult:
-    """Result of a synchronous query execution."""
+class QueryResult:
+    """Unified result of a query execution (sync or async)."""
     success: bool
-    entry: PriorityQueueEntry
+    should_terminate: bool = False  # If True, program should terminate
+    entry: Optional[PriorityQueueEntry] = None  # For sync thread-based execution
+    event: Optional[Event] = None  # For async execution
     latency_record: Optional[LatencyRecord] = None
     error_message: Optional[str] = None
 
@@ -1065,10 +1067,10 @@ def execute_query_sync(
     entry: PriorityQueueEntry,
     url: str,
     t0_ns: int,
-) -> QueryExecutionResult:
+) -> QueryResult:
     """
     Execute a single query synchronously using requests.
-    Returns QueryExecutionResult with success/failure status and timing data.
+    Returns QueryResult with success/failure status and timing data.
     """
     event = entry.event
     arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
@@ -1105,9 +1107,11 @@ def execute_query_sync(
             )
             print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
                   f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms")
-            return QueryExecutionResult(
+            return QueryResult(
                 success=True,
+                should_terminate=False,
                 entry=entry,
+                event=event,
                 latency_record=latency_record,
             )
         else:
@@ -1115,24 +1119,39 @@ def execute_query_sync(
             snippet = response.text[:200]
             print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {response.status_code} "
                   f"- FAILED resp='{snippet}'")
-            return QueryExecutionResult(
+            return QueryResult(
                 success=False,
+                should_terminate=False,
                 entry=entry,
+                event=event,
                 error_message=f"HTTP {response.status_code}: {snippet}",
             )
             
-    except requests.exceptions.RequestException as e:
+    except requests.exceptions.ConnectionError as e:
         print(f"[{event.at_ms:>6} ms] {event.qid}: CONNECTION ERROR - {e}")
-        return QueryExecutionResult(
+        return QueryResult(
             success=False,
+            should_terminate=True,  # Connection error should terminate
             entry=entry,
+            event=event,
+            error_message=str(e),
+        )
+    except requests.exceptions.RequestException as e:
+        print(f"[{event.at_ms:>6} ms] {event.qid}: REQUEST ERROR - {e}")
+        return QueryResult(
+            success=False,
+            should_terminate=False,
+            entry=entry,
+            event=event,
             error_message=str(e),
         )
     except Exception as e:
         print(f"[{event.at_ms:>6} ms] {event.qid}: UNEXPECTED ERROR - {e}")
-        return QueryExecutionResult(
+        return QueryResult(
             success=False,
+            should_terminate=True,  # Unexpected errors should terminate
             entry=entry,
+            event=event,
             error_message=str(e),
         )
 
@@ -1170,7 +1189,7 @@ def consumer_thread(
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     
-    def process_completed_queries() -> List[QueryExecutionResult]:
+    def process_completed_queries() -> List[QueryResult]:
         """Check and process all completed queries."""
         completed_results = []
         completed_ids = []
@@ -1182,9 +1201,11 @@ def consumer_thread(
                     completed_results.append(result)
                 except Exception as e:
                     # Future raised an exception
-                    completed_results.append(QueryExecutionResult(
+                    completed_results.append(QueryResult(
                         success=False,
+                        should_terminate=True,
                         entry=in_flight_query.entry,
+                        event=in_flight_query.entry.event,
                         error_message=str(e),
                     ))
                 completed_ids.append(entry_id)
@@ -1195,7 +1216,11 @@ def consumer_thread(
         
         return completed_results
     
-    def record_results(results: List[QueryExecutionResult]) -> List[PriorityQueueEntry]:
+    def check_should_terminate(results: List[QueryResult]) -> bool:
+        """Check if any result indicates termination is required."""
+        return any(r.should_terminate for r in results)
+    
+    def record_results(results: List[QueryResult]) -> List[PriorityQueueEntry]:
         """Record successful results and return failed entries for reinsertion."""
         failed_entries = []
         
@@ -1203,18 +1228,44 @@ def consumer_thread(
             for result in results:
                 if result.success and result.latency_record:
                     latency_records.append(result.latency_record)
-                else:
+                elif result.entry:
                     failed_entries.append(result.entry)
         
         return failed_entries
     
-    def handle_failure(initial_failed: List[PriorityQueueEntry]) -> None:
-        """Handle failure: pause, check responses, reinsert failed queries."""
+    def handle_failure(initial_failed: List[PriorityQueueEntry], should_terminate: bool) -> bool:
+        """
+        Handle failure: pause, check responses, reinsert failed queries.
+        Returns True if the program should terminate.
+        """
+        if should_terminate:
+            print(f"\n*** TERMINATION REQUESTED - recording dropped queries ***")
+            # Record all failed entries as dropped
+            with records_lock:
+                for entry in initial_failed:
+                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
+                    dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
+            return True
+        
         print(f"\n*** Failure detected - pausing for {pause_seconds:.0f}s ***")
         time.sleep(pause_seconds)
         
         # Collect all completed responses after pause
         completed_results = process_completed_queries()
+        
+        # Check if any completed results require termination
+        if check_should_terminate(completed_results):
+            print(f"*** TERMINATION REQUESTED during pause ***")
+            # Record all as dropped
+            with records_lock:
+                for entry in initial_failed:
+                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
+                    dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
+                for result in completed_results:
+                    if not result.success and result.entry:
+                        arrival_ms = (result.entry.arrival_ns - t0_ns) / 1e6
+                        dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=result.entry.event.qid))
+            return True
         
         # Record results and collect any additional failures
         additional_failed = record_results(completed_results)
@@ -1228,6 +1279,9 @@ def consumer_thread(
             priority_queue.put(entry)
         
         print(f"*** Resuming dispatch - reinserted {len(all_failed)} failed queries ***\n")
+        return False
+    
+    terminated = False
     
     try:
         while True:
@@ -1238,9 +1292,12 @@ def consumer_thread(
             # Check completed queries before getting next
             completed_results = process_completed_queries()
             if completed_results:
+                should_terminate = check_should_terminate(completed_results)
                 failed_entries = record_results(completed_results)
-                if failed_entries:
-                    handle_failure(failed_entries)
+                if failed_entries or should_terminate:
+                    if handle_failure(failed_entries, should_terminate):
+                        terminated = True
+                        break
                     continue  # Re-check queue after handling failure
             
             # Wait for concurrency slot if needed
@@ -1248,9 +1305,15 @@ def consumer_thread(
                 time.sleep(0.001)  # Small sleep to avoid busy waiting
                 completed_results = process_completed_queries()
                 if completed_results:
+                    should_terminate = check_should_terminate(completed_results)
                     failed_entries = record_results(completed_results)
-                    if failed_entries:
-                        handle_failure(failed_entries)
+                    if failed_entries or should_terminate:
+                        if handle_failure(failed_entries, should_terminate):
+                            terminated = True
+                            break
+            
+            if terminated:
+                break
             
             # Get next entry from queue (with timeout to allow stop_event check)
             try:
@@ -1274,21 +1337,52 @@ def consumer_thread(
             )
             in_flight[entry.entry_id] = InFlightQuery(entry=entry, future=future)
         
-        # Wait for all remaining in-flight queries
-        while in_flight:
-            time.sleep(0.1)
-            completed_results = process_completed_queries()
-            if completed_results:
-                failed_entries = record_results(completed_results)
-                if failed_entries:
-                    # For remaining queries, just record as dropped
+        # Handle termination: record all in-flight as dropped
+        if terminated:
+            print("[Consumer] Terminating - recording remaining in-flight queries as dropped")
+            with records_lock:
+                for in_flight_query in in_flight.values():
+                    entry = in_flight_query.entry
+                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
+                    dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
+            # Drain remaining queue items as dropped
+            while True:
+                try:
+                    entry = priority_queue.get_nowait()
+                    if entry is None:
+                        break
+                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
                     with records_lock:
-                        for entry in failed_entries:
-                            arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
-                            dropped_records.append(DroppedRecord(
-                                arrival_ms=arrival_ms,
-                                qid=entry.event.qid
-                            ))
+                        dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
+                except:
+                    break
+        else:
+            # Wait for all remaining in-flight queries
+            while in_flight:
+                time.sleep(0.1)
+                completed_results = process_completed_queries()
+                if completed_results:
+                    should_terminate = check_should_terminate(completed_results)
+                    failed_entries = record_results(completed_results)
+                    if failed_entries:
+                        if should_terminate:
+                            # Record as dropped
+                            with records_lock:
+                                for entry in failed_entries:
+                                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
+                                    dropped_records.append(DroppedRecord(
+                                        arrival_ms=arrival_ms,
+                                        qid=entry.event.qid
+                                    ))
+                        else:
+                            # Reinsert for retry (shouldn't happen at end, but handle gracefully)
+                            with records_lock:
+                                for entry in failed_entries:
+                                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
+                                    dropped_records.append(DroppedRecord(
+                                        arrival_ms=arrival_ms,
+                                        qid=entry.event.qid
+                                    ))
         
         print(f"[Consumer] Finished processing all queries")
         
@@ -1316,193 +1410,6 @@ async def _cleanup_collector(stop_event: asyncio.Event, collector_task: Optional
             await collector_task
         except Exception:
             pass
-
-
-async def _try_send_one(
-    session: aiohttp.ClientSession,
-    query_url: str,
-    sql_bytes: bytes,
-    query_id: str,
-    event: Event,
-    arrival_ms: float,
-    t0_ns: int,
-    latency_records: List[LatencyRecord],
-    records_lock: asyncio.Lock,
-    per_query_dir: Optional[str],
-    query_trace_period_ms: int,
-    trace_processes: bool,
-    url: str,
-    attempt: int,
-    connection_lost_event: Optional[asyncio.Event],
-    continue_upon_drop: bool = False,
-) -> bool:
-    """
-    Try to execute a single query attempt.
-    Returns True on success, False to retry.
-    Raises ConnectionLostError on connection failure.
-    """
-    # Initialize per-query trace collection
-    query_traces: List[QueryProfileTrace] = []
-    query_traces_lock = asyncio.Lock()
-    stop_event = asyncio.Event()
-    collector_task = None
-    
-    try:
-        req_start_ns = time.perf_counter_ns()
-        start_ms = (req_start_ns - t0_ns) / 1e6
-        
-        # Start profile events collector for this query (conditional)
-        if trace_processes:
-            collector_task = asyncio.create_task(
-                query_profile_collector(
-                    url=url,
-                    query_id=query_id,
-                    period_ms=query_trace_period_ms,
-                    traces=query_traces,
-                    traces_lock=query_traces_lock,
-                    query_start_ns=req_start_ns,
-                    stop_event=stop_event,
-                )
-            )
-        
-        async with session.post(query_url, data=sql_bytes) as resp:
-            body = await resp.read()
-            req_end_ns = time.perf_counter_ns()
-            end_ms = (req_end_ns - t0_ns) / 1e6
-            wait_ms = start_ms - arrival_ms
-            latency_ms = end_ms - arrival_ms
-            
-            # Stop the collector on success
-            await _cleanup_collector(stop_event, collector_task)
-            collector_task = None  # Mark as cleaned up
-
-            if resp.status == 200:
-                # Success - record and save traces
-                async with records_lock:
-                    latency_records.append(LatencyRecord(
-                        arrival_ms=arrival_ms,
-                        start_ms=start_ms,
-                        end_ms=end_ms,
-                        latency_ms=latency_ms,
-                        wait_ms=wait_ms,
-                        qid=event.qid
-                    ))
-                
-                if trace_processes and per_query_dir:
-                    save_query_profile_traces(per_query_dir, query_id, query_traces)
-                
-                exec_ms = end_ms - start_ms
-                traces_info = f" traces={len(query_traces)}" if trace_processes else ""
-                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
-                      f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms{traces_info}")
-                return True
-            else:
-                # Server rejected - retry or terminate
-                snippet = body[:200].decode("utf-8", errors="replace")
-                if continue_upon_drop:
-                    print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
-                          f"- continue_upon_drop=True, terminating... resp='{snippet}'")
-                    if connection_lost_event and not connection_lost_event.is_set():
-                        connection_lost_event.set()
-                    raise ConnectionLostError(f"HTTP {resp.status}: {snippet}") 
-                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): HTTP {resp.status} "
-                      f"(attempt {attempt+1}) - retrying... resp='{snippet}'")
-                return False
-                
-    except Exception as e:
-        # Cleanup collector on any exception
-        await _cleanup_collector(stop_event, collector_task)
-        
-        # Check if it's a connection error
-        if isinstance(e, (aiohttp.ServerDisconnectedError, aiohttp.ClientConnectorError, aiohttp.ClientOSError)):
-            if connection_lost_event and not connection_lost_event.is_set():
-                print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): CONNECTION LOST - {e}")
-                connection_lost_event.set()
-            raise ConnectionLostError(str(e)) from e
-        
-        # Other errors - log and retry
-        print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): ERROR {e} "
-              f"(attempt {attempt+1}) - retrying...")
-        return False
-
-
-@dataclass
-class QueryResult:
-    """Result of a query execution."""
-    success: bool
-    server_overloaded: bool  # True if server rejected due to overload
-    event: Event
-
-
-async def execute_query(
-    session: aiohttp.ClientSession,
-    url: str,
-    event: Event,
-    sql_bytes: bytes,
-    workload: Optional[str],
-    t0_ns: int,
-    arrival_ns: int,
-    latency_records: List[LatencyRecord],
-    dropped_records: List[DroppedRecord],
-    records_lock: asyncio.Lock,
-    per_query_dir: Optional[str],
-    query_trace_period_ms: int,
-    trace_processes: bool = False,
-    overload_event: Optional[asyncio.Event] = None,
-    connection_lost_event: Optional[asyncio.Event] = None,
-    continue_upon_drop: bool = False,
-) -> QueryResult:
-    """
-    Execute a query immediately (no timing wait - caller handles scheduling).
-    Returns QueryResult indicating success/failure and overload status.
-    """
-    arrival_ms = (arrival_ns - t0_ns) / 1e6
-    
-    query_id = generate_query_id(event.qid, event.at_ms)
-    query_url = f"{url.rstrip('/')}/?query_id={query_id}"
-    if workload:
-        query_url += f"&workload={workload}"
-    
-    try:
-        success = await _try_send_one(
-            session=session,
-            query_url=query_url,
-            sql_bytes=sql_bytes,
-            query_id=query_id,
-            event=event,
-            arrival_ms=arrival_ms,
-            t0_ns=t0_ns,
-            latency_records=latency_records,
-            records_lock=records_lock,
-            per_query_dir=per_query_dir,
-            query_trace_period_ms=query_trace_period_ms,
-            trace_processes=trace_processes,
-            url=url,
-            attempt=0,
-            connection_lost_event=connection_lost_event,
-            continue_upon_drop=continue_upon_drop,
-        )
-        if success:
-            return QueryResult(success=True, server_overloaded=False, event=event)
-        else:
-            # Server rejected - signal overload
-            if overload_event and not overload_event.is_set():
-                overload_event.set()
-            async with records_lock:
-                dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
-            return QueryResult(success=False, server_overloaded=True, event=event)
-            
-    except ConnectionLostError:
-        async with records_lock:
-            dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
-        if overload_event and not overload_event.is_set():
-            overload_event.set()
-        raise
-    except asyncio.CancelledError:
-        async with records_lock:
-            dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=event.qid))
-        raise
-
 
 async def run_schedule(
     schedule_path: str,

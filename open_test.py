@@ -86,6 +86,25 @@ class PriorityQueueEntry:
     arrival_ns: int = field(compare=False)  # When it was enqueued
 
 
+class QueueSentinel:
+    """Sentinel value for priority queue that always compares greater than any entry."""
+    def __lt__(self, other):
+        return False  # Sentinel is never less than anything
+    
+    def __gt__(self, other):
+        return True  # Sentinel is always greater than anything
+    
+    def __le__(self, other):
+        return isinstance(other, QueueSentinel)
+    
+    def __ge__(self, other):
+        return True
+
+
+# Singleton sentinel instance
+QUEUE_SENTINEL = QueueSentinel()
+
+
 @dataclass
 class InFlightQuery:
     """Tracks a dispatched query awaiting response."""
@@ -1071,8 +1090,8 @@ def producer_thread(
         priority_queue.put(entry)
         entry_counter += 1
     
-    # Signal producer is done by putting a sentinel (None)
-    priority_queue.put(None)
+    # Signal producer is done by putting a sentinel
+    priority_queue.put(QUEUE_SENTINEL)
     print(f"[Producer] Finished enqueueing {entry_counter} events")
 
 
@@ -1338,7 +1357,7 @@ def consumer_thread(
                 # Queue is empty or timeout, continue loop
                 continue
             
-            if entry is None:
+            if isinstance(entry, QueueSentinel):
                 # Sentinel received - producer is done
                 print("[Consumer] Received sentinel, waiting for in-flight queries...")
                 break
@@ -1366,7 +1385,7 @@ def consumer_thread(
             while True:
                 try:
                     entry = priority_queue.get_nowait()
-                    if entry is None:
+                    if isinstance(entry, QueueSentinel):
                         break
                     arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
                     with records_lock:

@@ -86,25 +86,6 @@ class PriorityQueueEntry:
     arrival_ns: int = field(compare=False)  # When it was enqueued
 
 
-class QueueSentinel:
-    """Sentinel value for priority queue that always compares greater than any entry."""
-    def __lt__(self, other):
-        return False  # Sentinel is never less than anything
-    
-    def __gt__(self, other):
-        return True  # Sentinel is always greater than anything
-    
-    def __le__(self, other):
-        return isinstance(other, QueueSentinel)
-    
-    def __ge__(self, other):
-        return True
-
-
-# Singleton sentinel instance
-QUEUE_SENTINEL = QueueSentinel()
-
-
 @dataclass
 class InFlightQuery:
     """Tracks a dispatched query awaiting response."""
@@ -1052,12 +1033,15 @@ def producer_thread(
     t0_ns: int,
     spin_ns: int,
     stop_event: threading.Event,
+    producer_done_event: threading.Event,
+    termination_event: threading.Event,
 ) -> None:
     """
     Producer thread: enqueues queries at scheduled times.
     
     Iterates through schedule events in order, waits until the scheduled
     arrival time for each event, then places it into the priority queue.
+    After producing all events, signals done and waits for termination.
     """
     entry_counter = 0
     for event in events:
@@ -1090,9 +1074,13 @@ def producer_thread(
         priority_queue.put(entry)
         entry_counter += 1
     
-    # Signal producer is done by putting a sentinel
-    priority_queue.put(QUEUE_SENTINEL)
-    print(f"[Producer] Finished enqueueing {entry_counter} events")
+    # Signal that producer is done producing
+    producer_done_event.set()
+    print(f"[Producer] Finished enqueueing {entry_counter} events, waiting for termination...")
+    
+    # Wait for termination signal from consumer
+    termination_event.wait()
+    print(f"[Producer] Termination received, exiting.")
 
 
 def execute_query_sync(
@@ -1199,12 +1187,16 @@ def consumer_thread(
     pause_seconds: float,
     max_concurrency: int,
     stop_event: threading.Event,
+    producer_done_event: threading.Event,
+    termination_event: threading.Event,
 ) -> None:
     """
     Consumer thread: dispatches queries and handles failures.
     
     Dequeues from priority queue, dispatches queries using a thread pool,
     and handles failures by pausing and reinserting failed queries.
+    When queue is exhausted and producer is done, waits for in-flight queries
+    then signals termination to the producer.
     """
     # Use a thread pool for concurrent query execution
     pool_size = max_concurrency if max_concurrency > 0 else 100
@@ -1354,13 +1346,11 @@ def consumer_thread(
             try:
                 entry = priority_queue.get(timeout=0.1)
             except:
-                # Queue is empty or timeout, continue loop
+                # Queue is empty or timeout - check if producer is done
+                if producer_done_event.is_set() and priority_queue.empty():
+                    print("[Consumer] Queue exhausted and producer done, waiting for in-flight queries...")
+                    break
                 continue
-            
-            if isinstance(entry, QueueSentinel):
-                # Sentinel received - producer is done
-                print("[Consumer] Received sentinel, waiting for in-flight queries...")
-                break
             
             # Dispatch query using thread pool
             future = executor.submit(
@@ -1385,8 +1375,6 @@ def consumer_thread(
             while True:
                 try:
                     entry = priority_queue.get_nowait()
-                    if isinstance(entry, QueueSentinel):
-                        break
                     arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
                     with records_lock:
                         dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
@@ -1423,6 +1411,8 @@ def consumer_thread(
         print(f"[Consumer] Finished processing all queries")
         
     finally:
+        # Signal termination to producer so it can exit
+        termination_event.set()
         executor.shutdown(wait=True)
         session.close()
 
@@ -1501,8 +1491,10 @@ async def run_schedule(
     # Priority queue for producer/consumer communication
     priority_queue: PriorityQueue = PriorityQueue()
     
-    # Stop events for threads
-    stop_event = threading.Event()
+    # Threading events for coordination
+    stop_event = threading.Event()           # Signal early termination (e.g., on error)
+    producer_done_event = threading.Event()  # Producer signals it's done producing
+    termination_event = threading.Event()    # Consumer signals producer can exit
     
     # Initialize periodic collection for async trace collectors (conditional based on flags)
     schedule_events_traces: List[ScheduleEventsTrace] = []
@@ -1544,7 +1536,8 @@ async def run_schedule(
     # Create and start producer thread
     producer = threading.Thread(
         target=producer_thread,
-        args=(events, sql_cache, priority_queue, t0_ns, spin_ns, stop_event),
+        args=(events, sql_cache, priority_queue, t0_ns, spin_ns, stop_event,
+              producer_done_event, termination_event),
         name="producer"
     )
     
@@ -1552,7 +1545,8 @@ async def run_schedule(
     consumer = threading.Thread(
         target=consumer_thread,
         args=(priority_queue, url, t0_ns, latency_records, dropped_records, 
-              records_lock, pause_seconds, max_concurrency, stop_event),
+              records_lock, pause_seconds, max_concurrency, stop_event,
+              producer_done_event, termination_event),
         name="consumer"
     )
     

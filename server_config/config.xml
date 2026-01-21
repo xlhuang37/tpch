@@ -5,8 +5,8 @@
   <user_files_path>../runtime/user_files/</user_files_path>
 
   <!-- ===== Server memory cap (fraction of RAM) ===== -->
-  <max_server_memory_usage>268435456000</max_server_memory_usage>
-  <max_concurrent_queries>64</max_concurrent_queries>
+  <max_server_memory_usage>266287972352</max_server_memory_usage>
+  <!-- <max_concurrent_queries>64</max_concurrent_queries> -->
   <cpu_slot_preemption>true</cpu_slot_preemption>
   <!--max_thread_pool_size>1000000</max_thread_pool_size-->
 

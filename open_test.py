@@ -1363,6 +1363,10 @@ def consumer_thread(
                 t0_ns,
             )
             in_flight[entry.entry_id] = InFlightQuery(entry=entry, future=future)
+
+            time.sleep(0.002)
+
+           
         
         # Handle termination: record all in-flight as dropped and signal producer
         if terminated:

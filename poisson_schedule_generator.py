@@ -1,76 +1,286 @@
 #!/usr/bin/env python3
-# python3 poisson_schedule_generator.py --length 30 --lam1 0.02 --lam2 0.04
+"""
+Generate Poisson arrival schedule from all queries in a directory.
+
+Arrivals follow a Poisson process at a fixed rate. Each arrival randomly
+selects a query uniformly from all available queries in the specified directory.
+
+Usage:
+    # Single schedule via CLI:
+    python poisson_schedule_generator.py --query-dir ./queries --rate 0.5 --length 3600
+
+    # Batch mode using SCHEDULES config:
+    python poisson_schedule_generator.py --batch
+"""
 
 import argparse
 import csv
+import glob
+import os
 import random
 from dataclasses import dataclass
+from typing import List
+
+# =============================================================================
+# CONFIGURATION - Define your schedules here (used with --batch flag)
+# =============================================================================
+
+@dataclass
+class ScheduleConfig:
+    arrival_rate: float   # Queries per second (QPS)
+    length: float         # Duration of schedule in seconds
+    query_dir: str        # Directory containing query SQL files
+    seed: int = 123       # RNG seed
+
+# Define all schedules to generate in batch mode
+SCHEDULES: List[ScheduleConfig] = [
+    ScheduleConfig(arrival_rate=0.1, length=3600, query_dir="./queries"),
+    # Add more schedules as needed:
+    # ScheduleConfig(arrival_rate=0.2, length=3600, query_dir="./queries"),
+    # ScheduleConfig(arrival_rate=0.5, length=1800, query_dir="./queries/fast"),
+]
+
+# Output directory for generated schedules
+SCHEDULES_DIR = "./schedules"
+
+# =============================================================================
+# END OF CONFIGURATION
+# =============================================================================
+
 
 @dataclass(frozen=True)
 class Event:
     at_ms: int
     qid: str
 
-def gen_poisson_events(rate_qps: float, length: float, qid: str, rng: random.Random):
+
+def load_queries(query_dir: str) -> List[str]:
+    """
+    Load all query names from a directory.
+    
+    Returns list of query names (filenames without .sql extension).
+    """
+    pattern = os.path.join(query_dir, "*.sql")
+    queries = []
+    for filepath in sorted(glob.glob(pattern)):
+        filename = os.path.basename(filepath)
+        query_name = filename[:-4] if filename.endswith(".sql") else filename
+        queries.append(query_name)
+    return queries
+
+
+def gen_poisson_schedule(
+    arrival_rate: float,
+    length: float,
+    queries: List[str],
+    rng: random.Random
+) -> List[Event]:
+    """
+    Generate Poisson arrivals with uniform query selection.
+    
+    Args:
+        arrival_rate: Arrival rate in queries per second (QPS)
+        length: Total duration in seconds
+        queries: List of query IDs to choose from
+        rng: Random number generator
+    
+    Returns:
+        List of Events sorted by arrival time
+    """
+    events = []
     t = 0.0
-    out = []
-    if rate_qps <= 0:
-        return out
+    
+    if arrival_rate <= 0:
+        return events
+    
     while True:
-        t += rng.expovariate(rate_qps)  # inter-arrival ~ Exp(rate)
+        t += rng.expovariate(arrival_rate)
         if t > length:
             break
-        out.append((t, qid))
-    return out
-
-def main():
-    ap = argparse.ArgumentParser(description="Generate sorted ClickHouse schedule.csv (at_ms,qid) for two Poisson classes.")
-    # Remove the --out argument line
-    ap.add_argument("--length", type=float, required=True, help="Total duration to generate (seconds)")
-    ap.add_argument("--lam1", type=float, required=True, help="Class 1 rate (QPS)")
-    ap.add_argument("--lam2", type=float, required=True, help="Class 2 rate (QPS)")
-    ap.add_argument("--qid1", default="q0001", help="Class 1 qid (maps to queries/<qid>.sql)")
-    ap.add_argument("--qid2", default="q0002", help="Class 2 qid (maps to queries/<qid>.sql)")
-    ap.add_argument("--seed", type=int, default=123, help="RNG seed")
-    ap.add_argument("--rounding", choices=["floor", "round"], default="round",
-                    help="How to convert seconds to milliseconds")
-    ap.add_argument("--prefix", default="", help="Prefix for output filename (e.g., '001_')")
-    args = ap.parse_args()
-
-    # Generate output filename from parameters
-    # Format: [prefix]qid1_qid2_lam{lam1}_{lam2}_len{length}_s{seed}_{rounding}.csv
-    lam1_str = f"{args.lam1:.6f}".rstrip('0').rstrip('.')
-    lam2_str = f"{args.lam2:.6f}".rstrip('0').rstrip('.')
-    length_str = f"{args.length:.6f}".rstrip('0').rstrip('.')
-    out_filename = f"{args.prefix}{args.qid1}_{args.qid2}_lam{lam1_str}_{lam2_str}_len{length_str}_s{args.seed}_{args.rounding}.csv"
-    outdir = "./schedules/" + out_filename
-
-    rng = random.Random(args.seed)
-
-
-    events = []
-    events += gen_poisson_events(args.lam1, args.length, args.qid1, rng)
-    events += gen_poisson_events(args.lam2, args.length, args.qid2, rng)
-
-    # Convert to ms and sort
-    out_events = []
-    for t_s, qid in events:
-        if args.rounding == "floor":
-            at_ms = int(t_s * 1000.0)
-        else:
-            at_ms = int(round(t_s * 1000.0))
-        out_events.append(Event(at_ms=at_ms, qid=qid))
-
+        qid = rng.choice(queries)
+        at_ms = int(round(t * 1000.0))
+        events.append(Event(at_ms=at_ms, qid=qid))
+    
     # Sort by timestamp; tie-break by qid for stable output
-    out_events.sort(key=lambda e: (e.at_ms, e.qid))
+    events.sort(key=lambda e: (e.at_ms, e.qid))
+    return events
 
-    with open(outdir, "w", newline="") as f:
+
+def write_schedule(events: List[Event], output_path: str):
+    """Write schedule to CSV file."""
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["at_ms", "qid"])
-        for e in out_events:
+        for e in events:
             w.writerow([e.at_ms, e.qid])
 
-    print(f"Wrote {len(out_events)} events to {outdir} (length={args.length}s, lam1={args.lam1}, lam2={args.lam2})")
+
+def generate_output_filename(
+    config: ScheduleConfig, 
+    index: int = None,
+    schedules_dir: str = SCHEDULES_DIR
+) -> str:
+    """Generate output filename from config parameters."""
+    rate_str = f"{config.arrival_rate:.6f}".rstrip('0').rstrip('.')
+    length_str = f"{config.length:.0f}"
+    dir_name = os.path.basename(os.path.normpath(config.query_dir))
+    
+    if index is not None:
+        filename = f"{index:03d}_{dir_name}_rate{rate_str}_len{length_str}_s{config.seed}.csv"
+    else:
+        filename = f"{dir_name}_rate{rate_str}_len{length_str}_s{config.seed}.csv"
+    
+    return os.path.join(schedules_dir, filename)
+
+
+def generate_from_config(config: ScheduleConfig, index: int = None) -> bool:
+    """
+    Generate schedule from config.
+    
+    Args:
+        config: Schedule configuration
+        index: Optional index for filename prefix (used in batch mode)
+    
+    Returns:
+        True on success, False on failure
+    """
+    queries = load_queries(config.query_dir)
+    if not queries:
+        print(f"  Error: No queries found in {config.query_dir}")
+        return False
+    
+    print(f"  Query directory: {config.query_dir}")
+    print(f"  Queries found: {len(queries)}")
+    print(f"  Arrival rate: {config.arrival_rate} QPS")
+    print(f"  Duration: {config.length}s")
+    
+    rng = random.Random(config.seed)
+    events = gen_poisson_schedule(config.arrival_rate, config.length, queries, rng)
+    
+    output_path = generate_output_filename(config, index)
+    write_schedule(events, output_path)
+    
+    print(f"  Generated {len(events)} events -> {output_path}")
+    return True
+
+
+def run_batch_mode():
+    """Generate all schedules defined in SCHEDULES config."""
+    print("=" * 70)
+    print("Poisson Schedule Generator - Batch Mode")
+    print("=" * 70)
+    
+    if not SCHEDULES:
+        print("No schedules defined in SCHEDULES config.")
+        return
+    
+    # Clear existing schedules
+    if os.path.exists(SCHEDULES_DIR):
+        for f in glob.glob(os.path.join(SCHEDULES_DIR, "*.csv")):
+            os.remove(f)
+    os.makedirs(SCHEDULES_DIR, exist_ok=True)
+    
+    success_count = 0
+    fail_count = 0
+    
+    for i, config in enumerate(SCHEDULES, 1):
+        print(f"\n[{i}/{len(SCHEDULES)}] rate={config.arrival_rate} QPS, "
+              f"length={config.length}s, dir={config.query_dir}")
+        print("-" * 50)
+        
+        if generate_from_config(config, index=i):
+            success_count += 1
+        else:
+            fail_count += 1
+    
+    print("\n" + "=" * 70)
+    print(f"Done! Generated {success_count} schedule(s), {fail_count} failed")
+    print("=" * 70)
+    
+    return fail_count == 0
+
+
+def run_single_mode(args):
+    """Generate a single schedule from CLI arguments."""
+    queries = load_queries(args.query_dir)
+    if not queries:
+        print(f"Error: No queries found in {args.query_dir}")
+        return False
+    
+    print(f"Loaded {len(queries)} queries from {args.query_dir}")
+    for q in queries:
+        print(f"  - {q}")
+    
+    rng = random.Random(args.seed)
+    events = gen_poisson_schedule(args.rate, args.length, queries, rng)
+    
+    # Determine output path
+    if args.output:
+        output_path = args.output
+    else:
+        config = ScheduleConfig(
+            arrival_rate=args.rate,
+            length=args.length,
+            query_dir=args.query_dir,
+            seed=args.seed
+        )
+        output_path = generate_output_filename(config)
+    
+    write_schedule(events, output_path)
+    print(f"\nGenerated {len(events)} events -> {output_path}")
+    return True
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        description="Generate Poisson schedule with uniform query selection.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Generate single schedule:
+  python poisson_schedule_generator.py --query-dir ./queries --rate 0.5 --length 3600
+
+  # Generate all schedules from SCHEDULES config:
+  python poisson_schedule_generator.py --batch
+
+  # Specify custom output path:
+  python poisson_schedule_generator.py --query-dir ./queries --rate 0.5 --length 3600 --output my_schedule.csv
+"""
+    )
+    ap.add_argument("--query-dir", type=str, 
+                    help="Directory containing query SQL files")
+    ap.add_argument("--rate", type=float, 
+                    help="Arrival rate in queries per second (QPS)")
+    ap.add_argument("--length", type=float, 
+                    help="Duration of schedule in seconds")
+    ap.add_argument("--seed", type=int, default=123, 
+                    help="RNG seed (default: 123)")
+    ap.add_argument("--output", type=str, 
+                    help="Output CSV path (auto-generated if not specified)")
+    ap.add_argument("--batch", action="store_true",
+                    help="Generate all schedules from SCHEDULES config")
+    args = ap.parse_args()
+
+    # Batch mode: generate from SCHEDULES config
+    if args.batch:
+        success = run_batch_mode()
+        return 0 if success else 1
+
+    # If no arguments provided, default to batch mode
+    if not args.query_dir and not args.rate and not args.length:
+        print("No arguments provided. Running in batch mode...")
+        print("(Use --help to see CLI options)\n")
+        success = run_batch_mode()
+        return 0 if success else 1
+
+    # Single schedule mode - validate required args
+    if not all([args.query_dir, args.rate, args.length]):
+        ap.error("--query-dir, --rate, and --length are all required for single mode")
+
+    success = run_single_mode(args)
+    return 0 if success else 1
+
 
 if __name__ == "__main__":
-    main()
+    exit(main())

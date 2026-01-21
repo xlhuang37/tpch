@@ -1346,9 +1346,11 @@ def consumer_thread(
             try:
                 entry = priority_queue.get(timeout=0.1)
             except:
-                # Queue is empty or timeout - check if producer is done
-                if producer_done_event.is_set() and priority_queue.empty():
-                    print("[Consumer] Queue exhausted and producer done, waiting for in-flight queries...")
+                # Queue is empty or timeout - check termination conditions
+                # Only terminate when: producer done AND queue empty AND no in-flight queries
+                # (in-flight queries might fail and need reinsertion, so keep looping)
+                if producer_done_event.is_set() and priority_queue.empty() and not in_flight:
+                    print("[Consumer] Queue exhausted, producer done, no in-flight - terminating")
                     break
                 continue
             
@@ -1380,34 +1382,9 @@ def consumer_thread(
                         dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
                 except:
                     break
-        else:
-            # Wait for all remaining in-flight queries
-            while in_flight:
-                time.sleep(0.1)
-                completed_results = process_completed_queries()
-                if completed_results:
-                    should_terminate = check_should_terminate(completed_results)
-                    failed_entries = record_results(completed_results)
-                    if failed_entries:
-                        if should_terminate:
-                            # Record as dropped
-                            with records_lock:
-                                for entry in failed_entries:
-                                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
-                                    dropped_records.append(DroppedRecord(
-                                        arrival_ms=arrival_ms,
-                                        qid=entry.event.qid
-                                    ))
-                        else:
-                            # Reinsert for retry (shouldn't happen at end, but handle gracefully)
-                            with records_lock:
-                                for entry in failed_entries:
-                                    arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
-                                    dropped_records.append(DroppedRecord(
-                                        arrival_ms=arrival_ms,
-                                        qid=entry.event.qid
-                                    ))
         
+        # Note: Normal exit (not terminated) guarantees in_flight is empty
+        # because we only break when: producer_done AND queue empty AND not in_flight
         print(f"[Consumer] Finished processing all queries")
         
     finally:

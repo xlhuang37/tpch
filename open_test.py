@@ -996,22 +996,34 @@ async def wait_until_ns(target_ns: int, spin_ns: int) -> None:
             return
 
 
-def wait_until_ns_sync(target_ns: int, spin_ns: int) -> None:
+def wait_until_ns_sync(target_ns: int, spin_ns: int, stop_event: Optional[threading.Event] = None) -> bool:
     """
     Synchronous version: Coarse sleep then spin near the target for better ms accuracy.
     spin_ns: final busy-wait window
+    stop_event: if provided, checked periodically to allow early termination
+    Returns: True if wait completed normally, False if interrupted by stop_event
     """
+    CHECK_INTERVAL_NS = 100_000_000  # Check stop_event every 100ms
+    
     while True:
+        # Check for stop signal
+        if stop_event and stop_event.is_set():
+            return False
+        
         now = time.perf_counter_ns()
         remaining = target_ns - now
         if remaining <= 0:
-            return
+            return True
         if remaining > spin_ns:
-            time.sleep((remaining - spin_ns) / 1e9)
+            # Sleep in chunks to allow stop_event checking
+            sleep_ns = min(remaining - spin_ns, CHECK_INTERVAL_NS)
+            time.sleep(sleep_ns / 1e9)
         else:
             while time.perf_counter_ns() < target_ns:
+                if stop_event and stop_event.is_set():
+                    return False
                 pass
-            return
+            return True
 
 
 def producer_thread(
@@ -1034,9 +1046,11 @@ def producer_thread(
             print(f"[Producer] Stop signal received, exiting...")
             break
         
-        # Wait until scheduled arrival time
+        # Wait until scheduled arrival time (with stop_event check)
         target_ns = t0_ns + event.at_ms * 1_000_000
-        wait_until_ns_sync(target_ns, spin_ns)
+        if not wait_until_ns_sync(target_ns, spin_ns, stop_event):
+            print(f"[Producer] Stop signal received during wait, exiting...")
+            break
         
         # Record actual arrival time
         arrival_ns = time.perf_counter_ns()
@@ -1297,6 +1311,7 @@ def consumer_thread(
                 if failed_entries or should_terminate:
                     if handle_failure(failed_entries, should_terminate):
                         terminated = True
+                        stop_event.set()  # Signal producer to stop
                         break
                     continue  # Re-check queue after handling failure
             
@@ -1310,6 +1325,7 @@ def consumer_thread(
                     if failed_entries or should_terminate:
                         if handle_failure(failed_entries, should_terminate):
                             terminated = True
+                            stop_event.set()  # Signal producer to stop
                             break
             
             if terminated:
@@ -1337,9 +1353,10 @@ def consumer_thread(
             )
             in_flight[entry.entry_id] = InFlightQuery(entry=entry, future=future)
         
-        # Handle termination: record all in-flight as dropped
+        # Handle termination: record all in-flight as dropped and signal producer
         if terminated:
-            print("[Consumer] Terminating - recording remaining in-flight queries as dropped")
+            stop_event.set()  # Ensure producer is signaled to stop
+            print("[Consumer] Terminating - signaling producer and recording remaining queries as dropped")
             with records_lock:
                 for in_flight_query in in_flight.values():
                     entry = in_flight_query.entry

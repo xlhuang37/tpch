@@ -1643,7 +1643,7 @@ async def main():
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = os.path.join("./output", timestamp)
+    output_dir = os.path.join("./output/open", timestamp)
     os.makedirs(output_dir, exist_ok=True)
     print(f"\nOutput directory: {output_dir}")
     

@@ -702,7 +702,7 @@ def main():
     )
     ap.add_argument(
         "--queries-dir", 
-        default="./queries/",
+        required=True,
         help="Directory containing SQL files to benchmark (default: ./queries/)"
     )
     ap.add_argument(

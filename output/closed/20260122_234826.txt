@@ -1,0 +1,2 @@
+Loaded 2 queries.
+Code: 60. DB::Exception: Received from localhost:9000. DB::Exception: Unknown table expression identifier 'lineitem' in scope SELECT l_returnflag, l_linestatus, l_orderkey, sum(l_extendedprice * (1 - l_discount)) OVER (PARTITION BY l_orderkey ORDER BY l_linenumber ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_charge FROM lineitem WHERE l_shipdate <= (toDate('1998-12-01') - toIntervalDay('90')). (UNKNOWN_TABLE) (version 25.11.1.1)

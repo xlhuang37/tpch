@@ -1,0 +1,54 @@
+============================================================
+HARDWARE SPECIFICATIONS
+============================================================
+
+Recorded at: 2026-01-23T02:13:25.870380
+
+SYSTEM INFO (DMI)
+----------------------------------------
+  Vendor:      Amazon EC2
+  Product:     c6id.metal
+  Version:     110-003546-002
+  Board:       Amazon EC2 Not Specified
+  BIOS:        Amazon EC2 1.0 (10/16/2017)
+
+PLATFORM
+----------------------------------------
+  system: Linux
+  release: 6.14.0-1018-aws
+  version: #18~24.04.1-Ubuntu SMP Mon Nov 24 19:46:27 UTC 2025
+  machine: x86_64
+  processor: x86_64
+  python_version: 3.12.3
+
+CPU (from /proc/cpuinfo)
+----------------------------------------
+  Model:       Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz
+  Vendor:      GenuineIntel
+  CPU Family:  6
+  Stepping:    6
+  Microcode:   0xd000410
+  MHz:         3420.077
+  Cache:       55296 KB
+  Processors:  128
+
+CPU (from psutil)
+----------------------------------------
+  note: psutil not installed
+
+MEMORY (from /proc/meminfo)
+----------------------------------------
+  MemTotal: 263908644 kB
+  MemFree: 164349420 kB
+  MemAvailable: 253460948 kB
+  Buffers: 648752 kB
+  Cached: 86511480 kB
+  SwapTotal: 0 kB
+  SwapFree: 0 kB
+  HugePages_Total: 0
+  Hugepagesize: 2048 kB
+
+MEMORY (from psutil)
+----------------------------------------
+  note: psutil not installed
+

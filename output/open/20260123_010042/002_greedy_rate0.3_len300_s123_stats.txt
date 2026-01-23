@@ -1,0 +1,67 @@
+Statistics for schedule: 002_greedy_rate0.3_len300_s123
+Total completed queries: 95
+Total dropped queries: 0
+============================================================
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    95
+  Average:  74075.5904 ms
+  Min:      8999.1924 ms
+  Max:      119983.7595 ms
+  P50:      72899.4199 ms
+  P90:      112893.9540 ms
+  P95:      116875.2198 ms
+  P99:      119001.2486 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    95
+  Average:  0.6006 ms
+  Min:      0.3069 ms
+  Max:      1.0704 ms
+  P50:      0.4460 ms
+  P90:      0.9985 ms
+  P95:      1.0437 ms
+  P99:      1.0634 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_greedy_58:
+    Completed: 47
+    Latency:
+      Average:  102856.4944 ms
+      Min:      55195.3966 ms
+      Max:      119983.7595 ms
+      P50:      108386.9527 ms
+      P90:      116897.8147 ms
+      P95:      117760.1043 ms
+      P99:      119502.9563 ms
+    Wait Time:
+      Average:  0.6128 ms
+      Min:      0.3393 ms
+      Max:      1.0704 ms
+      P50:      0.4467 ms
+      P90:      1.0049 ms
+      P95:      1.0478 ms
+      P99:      1.0621 ms
+
+  p_greedy_140:
+    Completed: 48
+    Latency:
+      Average:  45894.2886 ms
+      Min:      8999.1924 ms
+      Max:      76146.0618 ms
+      P50:      41997.4000 ms
+      P90:      72773.7515 ms
+      P95:      74155.3397 ms
+      P99:      75513.9801 ms
+    Wait Time:
+      Average:  0.5886 ms
+      Min:      0.3069 ms
+      Max:      1.0630 ms
+      P50:      0.4447 ms
+      P90:      0.9954 ms
+      P95:      1.0253 ms
+      P99:      1.0566 ms

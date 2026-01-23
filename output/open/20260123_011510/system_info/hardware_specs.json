@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-01-23T01:15:10.842438",
+  "platform": {
+    "system": "Linux",
+    "release": "6.14.0-1018-aws",
+    "version": "#18~24.04.1-Ubuntu SMP Mon Nov 24 19:46:27 UTC 2025",
+    "machine": "x86_64",
+    "processor": "x86_64",
+    "python_version": "3.12.3"
+  },
+  "proc_cpuinfo": {
+    "model_name": "Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz",
+    "vendor_id": "GenuineIntel",
+    "cpu_family": "6",
+    "model": "106",
+    "stepping": "6",
+    "microcode": "0xd000410",
+    "cpu_mhz": "800.000",
+    "cache_size": "55296 KB",
+    "flags": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx pdpe1gb rdtscp lm constant_tsc art arch_perfmon pebs bts rep_good nop...",
+    "processor_count": 128
+  },
+  "proc_meminfo": {
+    "MemTotal": "263908644 kB",
+    "MemFree": "168002092 kB",
+    "MemAvailable": "257097136 kB",
+    "Buffers": "645688 kB",
+    "Cached": "86508176 kB",
+    "SwapTotal": "0 kB",
+    "SwapFree": "0 kB",
+    "HugePages_Total": "0",
+    "Hugepagesize": "2048 kB"
+  },
+  "dmi_info": {
+    "sys_vendor": "Amazon EC2",
+    "product_name": "c6id.metal",
+    "product_version": "110-003546-002",
+    "board_vendor": "Amazon EC2",
+    "board_name": "Not Specified",
+    "board_version": "Not Specified",
+    "bios_vendor": "Amazon EC2",
+    "bios_version": "1.0",
+    "bios_date": "10/16/2017"
+  },
+  "cpu": {
+    "note": "psutil not installed"
+  },
+  "memory": {
+    "note": "psutil not installed"
+  }
+}

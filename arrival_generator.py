@@ -34,10 +34,7 @@ class ScheduleConfig:
 
 # Define all schedules to generate in batch mode
 SCHEDULES: List[ScheduleConfig] = [
-    ScheduleConfig(arrival_rate=0.18, length=300, query_dir="queries/extreme_aws/greedy"), 
-    ScheduleConfig(arrival_rate=0.24, length=300, query_dir="queries/extreme_aws/greedy"),
-    ScheduleConfig(arrival_rate=0.27, length=300, query_dir="queries/extreme_aws/greedy"),
-    ScheduleConfig(arrival_rate=0.32, length=300, query_dir="queries/extreme_aws/greedy"),
+    ScheduleConfig(arrival_rate=0.27, length=300, query_dir="queries/extreme_aws/default"),
     # Add more schedules as needed:
     # ScheduleConfig(arrival_rate=0.2, length=3600, query_dir="./queries"),
     # ScheduleConfig(arrival_rate=0.5, length=1800, query_dir="./queries/fast"),

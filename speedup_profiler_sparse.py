@@ -3,13 +3,7 @@
 Sparse Speedup Profiler for ClickHouse Queries
 
 Similar to speedup_profiler.py but samples at scattered thread counts (e.g., 1,2,4,8,12,16,...)
-and fits Amdahl's law to interpolate the full speedup curve.
-
-Amdahl's Law: Speedup(N) = 1 / (s + (1-s)/N)
-where s is the serial fraction of the workload.
-
-If the speedup increment becomes too low (plateau detected), the fitted curve
-is flattened to that plateau value.
+and uses speedup_fitcurve to fit Amdahl's law and interpolate the full speedup curve.
 
 Usage:
     # Test a single query file
@@ -24,7 +18,7 @@ Usage:
     # Custom sample points
     python speedup_profiler_sparse.py --query q.sql --sample-points 1,2,4,8,16,32,64
     
-    # Adjust plateau threshold (default 0.05 = 5% improvement threshold)
+    # Adjust plateau threshold (default 0.001 = 0.1% improvement threshold)
     python speedup_profiler_sparse.py --query q.sql --plateau-threshold 0.1
 """
 
@@ -33,162 +27,16 @@ import glob
 import os
 import time
 import sys
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 import urllib.request
 import urllib.parse
 
-try:
-    import numpy as np
-    from scipy.optimize import curve_fit
-    HAS_SCIPY = True
-except ImportError:
-    HAS_SCIPY = False
-    print("Warning: scipy/numpy not available. Install with: pip install scipy numpy", file=sys.stderr)
+# Import curve fitting functionality
+from speedup_fitcurve import fit_speedup_curve
 
 
 # Default sample points for sparse profiling
 DEFAULT_SAMPLE_POINTS = [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]
-
-
-def amdahl_law(n: np.ndarray, s: float) -> np.ndarray:
-    """
-    Amdahl's Law speedup function.
-    
-    Args:
-        n: Number of processors/threads
-        s: Serial fraction (0 <= s <= 1)
-    
-    Returns:
-        Speedup = 1 / (s + (1-s)/n)
-    """
-    return 1.0 / (s + (1.0 - s) / n)
-
-
-def amdahl_law_with_overhead(n: np.ndarray, s: float, overhead: float) -> np.ndarray:
-    """
-    Modified Amdahl's Law with parallelization overhead.
-    
-    Args:
-        n: Number of processors/threads
-        s: Serial fraction (0 <= s <= 1)
-        overhead: Per-thread overhead factor
-    
-    Returns:
-        Speedup accounting for overhead
-    """
-    base_speedup = 1.0 / (s + (1.0 - s) / n)
-    overhead_factor = 1.0 + overhead * (n - 1)
-    return base_speedup / overhead_factor
-
-
-def fit_amdahl(thread_counts: List[int], speedups: List[float], 
-               use_overhead: bool = False) -> Tuple[float, Optional[float]]:
-    """
-    Fit Amdahl's law to observed speedup data.
-    
-    Args:
-        thread_counts: List of thread counts sampled
-        speedups: Corresponding observed speedups
-        use_overhead: If True, fit model with overhead term
-    
-    Returns:
-        (serial_fraction, overhead) - overhead is None if use_overhead=False
-    """
-    if not HAS_SCIPY:
-        # Fallback: estimate s from asymptotic speedup
-        max_speedup = max(speedups)
-        s = 1.0 / max_speedup if max_speedup > 0 else 1.0
-        return s, None
-    
-    x = np.array(thread_counts, dtype=float)
-    y = np.array(speedups, dtype=float)
-    
-    try:
-        if use_overhead:
-            # Fit with overhead parameter
-            popt, _ = curve_fit(
-                amdahl_law_with_overhead, x, y,
-                p0=[0.1, 0.001],  # Initial guess: 10% serial, small overhead
-                bounds=([0.0, 0.0], [1.0, 0.1]),  # s in [0,1], overhead in [0, 0.1]
-                maxfev=5000
-            )
-            return popt[0], popt[1]
-        else:
-            # Fit standard Amdahl's law
-            popt, _ = curve_fit(
-                amdahl_law, x, y,
-                p0=[0.1],  # Initial guess: 10% serial fraction
-                bounds=([0.0], [1.0]),  # s must be in [0, 1]
-                maxfev=5000
-            )
-            return popt[0], None
-    except Exception as e:
-        print(f"  Warning: Curve fitting failed ({e}), using fallback estimation", file=sys.stderr)
-        # Fallback estimation
-        max_speedup = max(speedups)
-        s = 1.0 / max_speedup if max_speedup > 0 else 1.0
-        return min(max(s, 0.0), 1.0), None
-
-
-def detect_plateau(thread_counts: List[int], speedups: List[float], 
-                   threshold: float = 0.05) -> Tuple[bool, int, float]:
-    """
-    Detect if speedup has plateaued (incremental gain below threshold).
-    
-    Args:
-        thread_counts: List of thread counts
-        speedups: Corresponding speedups
-        threshold: Relative improvement threshold (e.g., 0.05 = 5%)
-    
-    Returns:
-        (has_plateau, plateau_thread_count, plateau_speedup)
-    """
-    if len(speedups) < 2:
-        return False, thread_counts[-1], speedups[-1]
-    
-    for i in range(1, len(speedups)):
-        prev_speedup = speedups[i - 1]
-        curr_speedup = speedups[i]
-        
-        if prev_speedup > 0:
-            relative_gain = (curr_speedup - prev_speedup) / prev_speedup
-            
-            # If gain is below threshold (or negative), we've hit plateau
-            if relative_gain < threshold:
-                return True, thread_counts[i - 1], prev_speedup
-    
-    return False, thread_counts[-1], speedups[-1]
-
-
-def generate_full_speedup_curve(
-    max_threads: int,
-    serial_fraction: float,
-    overhead: Optional[float],
-    plateau_thread: int,
-    plateau_speedup: float,
-    has_plateau: bool
-) -> List[float]:
-    """
-    Generate full speedup curve from 1 to max_threads using fitted model.
-    
-    If plateau is detected, the curve flattens at the plateau point.
-    """
-    speedups = []
-    
-    for n in range(1, max_threads + 1):
-        if has_plateau and n >= plateau_thread:
-            # Flatten at plateau value
-            speedup = plateau_speedup
-        else:
-            # Use fitted Amdahl's law
-            if overhead is not None:
-                speedup = float(amdahl_law_with_overhead(np.array([n]), serial_fraction, overhead)[0])
-            else:
-                speedup = float(amdahl_law(np.array([n]), serial_fraction)[0])
-        
-        speedups.append(speedup)
-    
-    return speedups
 
 
 def read_query_file(filepath: str) -> str:
@@ -312,32 +160,22 @@ def process_query_file(
             print(f"{tc:<10} {t:<15.4f} {s:<10.2f}")
         print()
     
-    # Detect plateau
-    has_plateau, plateau_thread, plateau_speedup = detect_plateau(
-        thread_counts, speedups_sampled, plateau_threshold
+    # Use speedup_fitcurve to fit and generate full curve
+    full_speedups, metadata = fit_speedup_curve(
+        thread_counts, speedups_sampled,
+        max_threads, plateau_threshold, use_overhead
     )
     
     if verbose:
-        if has_plateau:
-            print(f"Plateau detected at {plateau_thread} threads (speedup: {plateau_speedup:.2f})")
+        if metadata['has_plateau']:
+            print(f"Plateau detected at {metadata['plateau_thread']} threads (speedup: {metadata['plateau_speedup']:.2f})")
         else:
             print("No plateau detected")
-    
-    # Fit Amdahl's law
-    serial_fraction, overhead = fit_amdahl(thread_counts, speedups_sampled, use_overhead)
-    
-    if verbose:
-        print(f"Fitted serial fraction: {serial_fraction:.4f}")
-        if overhead is not None:
-            print(f"Fitted overhead: {overhead:.6f}")
-        theoretical_max = 1.0 / serial_fraction if serial_fraction > 0 else float('inf')
+        print(f"Fitted serial fraction: {metadata['serial_fraction']:.4f}")
+        if metadata['overhead'] is not None:
+            print(f"Fitted overhead: {metadata['overhead']:.6f}")
+        theoretical_max = 1.0 / metadata['serial_fraction'] if metadata['serial_fraction'] > 0 else float('inf')
         print(f"Theoretical max speedup (Amdahl): {theoretical_max:.2f}")
-    
-    # Generate full speedup curve
-    full_speedups = generate_full_speedup_curve(
-        max_threads, serial_fraction, overhead,
-        plateau_thread, plateau_speedup, has_plateau
-    )
     
     # Print fitted results
     if verbose:
@@ -359,26 +197,33 @@ def process_query_file(
     
     # Save to file next to the original query file
     base_path = os.path.splitext(query_file)[0]
-    output_path = f"{base_path}_speedup.csv"
     
+    # Save speedup values (only speedups, no runtime at end)
+    output_path = f"{base_path}_speedup.csv"
     with open(output_path, 'w') as f:
         for s in full_speedups:
             f.write(f"{s:.4f}\n")
-        # Save 1-core average runtime as indicator of query size
-        f.write(f"{avg_times[0]:.4f}\n")
     
     if verbose:
         print(f"Speedup values saved to: {output_path}")
     
-    # Also save fitting metadata
+    # Save 1-core runtime in separate file (query size estimate)
+    runtime_path = f"{base_path}_runtime.txt"
+    with open(runtime_path, 'w') as f:
+        f.write(f"{avg_times[0]:.4f}\n")
+    
+    if verbose:
+        print(f"1-core runtime saved to: {runtime_path}")
+    
+    # Save fitting metadata
     meta_path = f"{base_path}_speedup_meta.txt"
     with open(meta_path, 'w') as f:
-        f.write(f"serial_fraction: {serial_fraction:.6f}\n")
-        if overhead is not None:
-            f.write(f"overhead: {overhead:.6f}\n")
-        f.write(f"has_plateau: {has_plateau}\n")
-        f.write(f"plateau_thread: {plateau_thread}\n")
-        f.write(f"plateau_speedup: {plateau_speedup:.4f}\n")
+        f.write(f"serial_fraction: {metadata['serial_fraction']:.6f}\n")
+        if metadata['overhead'] is not None:
+            f.write(f"overhead: {metadata['overhead']:.6f}\n")
+        f.write(f"has_plateau: {metadata['has_plateau']}\n")
+        f.write(f"plateau_thread: {metadata['plateau_thread']}\n")
+        f.write(f"plateau_speedup: {metadata['plateau_speedup']:.4f}\n")
         f.write(f"sample_points: {thread_counts}\n")
         f.write(f"sampled_speedups: {speedups_sampled}\n")
     
@@ -429,32 +274,22 @@ def process_query_string(
             print(f"{tc:<10} {t:<15.4f} {s:<10.2f}")
         print()
     
-    # Detect plateau
-    has_plateau, plateau_thread, plateau_speedup = detect_plateau(
-        thread_counts, speedups_sampled, plateau_threshold
+    # Use speedup_fitcurve to fit and generate full curve
+    full_speedups, metadata = fit_speedup_curve(
+        thread_counts, speedups_sampled,
+        max_threads, plateau_threshold, use_overhead
     )
     
     if verbose:
-        if has_plateau:
-            print(f"Plateau detected at {plateau_thread} threads (speedup: {plateau_speedup:.2f})")
+        if metadata['has_plateau']:
+            print(f"Plateau detected at {metadata['plateau_thread']} threads (speedup: {metadata['plateau_speedup']:.2f})")
         else:
             print("No plateau detected")
-    
-    # Fit Amdahl's law
-    serial_fraction, overhead = fit_amdahl(thread_counts, speedups_sampled, use_overhead)
-    
-    if verbose:
-        print(f"Fitted serial fraction: {serial_fraction:.4f}")
-        if overhead is not None:
-            print(f"Fitted overhead: {overhead:.6f}")
-        theoretical_max = 1.0 / serial_fraction if serial_fraction > 0 else float('inf')
+        print(f"Fitted serial fraction: {metadata['serial_fraction']:.4f}")
+        if metadata['overhead'] is not None:
+            print(f"Fitted overhead: {metadata['overhead']:.6f}")
+        theoretical_max = 1.0 / metadata['serial_fraction'] if metadata['serial_fraction'] > 0 else float('inf')
         print(f"Theoretical max speedup (Amdahl): {theoretical_max:.2f}")
-    
-    # Generate full speedup curve
-    full_speedups = generate_full_speedup_curve(
-        max_threads, serial_fraction, overhead,
-        plateau_thread, plateau_speedup, has_plateau
-    )
     
     # Print fitted results
     if verbose:
@@ -521,10 +356,6 @@ def main():
     
     # Parse sample points
     sample_points = parse_sample_points(args.sample_points)
-    
-    if not HAS_SCIPY:
-        print("Warning: scipy not installed. Curve fitting will use fallback estimation.", file=sys.stderr)
-        print("Install scipy for better fitting: pip install scipy numpy", file=sys.stderr)
     
     # Collect query files to process
     if args.dir:

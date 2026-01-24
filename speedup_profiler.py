@@ -144,16 +144,23 @@ def process_query_file(query_file: str, host: str, port: int,
     
     # Save to file next to the original query file
     base_path = os.path.splitext(query_file)[0]
-    output_path = f"{base_path}_speedup.csv"
     
+    # Save speedup values (only speedups, no runtime at end)
+    output_path = f"{base_path}_speedup.csv"
     with open(output_path, 'w') as f:
         for s in speedups:
             f.write(f"{s:.4f}\n")
-        # Save 1-core average runtime as indicator of query size
-        f.write(f"{avg_times[0]:.4f}\n")
     
     if verbose:
         print(f"Speedup values saved to: {output_path}")
+    
+    # Save 1-core runtime in separate file (query size estimate)
+    runtime_path = f"{base_path}_runtime.txt"
+    with open(runtime_path, 'w') as f:
+        f.write(f"{avg_times[0]:.4f}\n")
+    
+    if verbose:
+        print(f"1-core runtime saved to: {runtime_path}")
     
     return speedups
 

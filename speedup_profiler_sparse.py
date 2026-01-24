@@ -139,7 +139,7 @@ def process_query_file(
     query = read_query_file(query_file)
     
     # Filter sample points to be within max_threads and include 1
-    valid_samples = sorted(set([1] + [p for p in sample_points if p <= max_threads]))
+    valid_samples = sorted(set([1] + [p for p in sample_points]))
     max_threads = max(valid_samples)
     
     if verbose:

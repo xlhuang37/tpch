@@ -128,7 +128,13 @@ def process_query_file(query_file: str, host: str, port: int,
     speedups, avg_times, all_times = measure_speedup(
         host, port, query, max_threads, repeat, warmup, verbose
     )
-    
+
+    # Use speedup_fitcurve to fit and generate full curve
+    full_speedups, metadata = fit_speedup_curve(
+        thread_counts, speedups,
+        max_threads, plateau_threshold, model
+    )
+
     # Print results
     if verbose:
         print("-" * 60)
@@ -138,6 +144,19 @@ def process_query_file(query_file: str, host: str, port: int,
         print("-" * 35)
         for i, (t, s) in enumerate(zip(avg_times, speedups), 1):
             print(f"{i:<10} {t:<15.4f} {s:<10.2f}")
+        print()
+
+    # Print fitted results
+    if verbose:
+        print("-" * 60)
+        print("FITTED SPEEDUP CURVE (1 to {})".format(max_threads))
+        print("-" * 60)
+        display_points = [1, 2, 4, 8, 16, 32, 64]
+        display_points = [p for p in display_points if p <= max_threads]
+        print(f"{'Threads':<10} {'Fitted Speedup':<15}")
+        print("-" * 25)
+        for p in display_points:
+            print(f"{p:<10} {full_speedups[p-1]:<15.2f}")
         print()
     
     # Output speedup list
@@ -153,6 +172,12 @@ def process_query_file(query_file: str, host: str, port: int,
         for s in speedups:
             f.write(f"{s:.4f}\n")
     
+    # Save speedup values with vanilla naming
+    output_path = f"{base_path}_curved_speedup.csv"
+    with open(output_path, 'w') as f:
+        for s in full_speedups:
+            f.write(f"{s:.4f}\n")
+
     if verbose:
         print(f"Speedup values saved to: {output_path}")
     
@@ -184,6 +209,12 @@ def process_query_string(query: str, host: str, port: int,
     speedups, avg_times, all_times = measure_speedup(
         host, port, query, max_threads, repeat, warmup, verbose
     )
+
+    # Use speedup_fitcurve to fit and generate full curve
+    full_speedups, metadata = fit_speedup_curve(
+        thread_counts, speedups,
+        max_threads, 0.001, 'usl',
+    )
     
     # Print results
     if verbose:
@@ -195,12 +226,25 @@ def process_query_string(query: str, host: str, port: int,
         for i, (t, s) in enumerate(zip(avg_times, speedups), 1):
             print(f"{i:<10} {t:<15.4f} {s:<10.2f}")
         print()
-    
+
+    # Print fitted results
+    if verbose:
+        print("-" * 60)
+        print("FITTED SPEEDUP CURVE (1 to {})".format(max_threads))
+        print("-" * 60)
+        display_points = [1, 2, 4, 8, 16, 32, 64]
+        display_points = [p for p in display_points if p <= max_threads]
+        print(f"{'Threads':<10} {'Fitted Speedup':<15}")
+        print("-" * 25)
+        for p in display_points:
+            print(f"{p:<10} {full_speedups[p-1]:<15.2f}")
+        print()
+
     # Output speedup list
-    speedup_str = ", ".join(f"{s:.2f}" for s in speedups)
+    speedup_str = ", ".join(f"{s:.2f}" for s in full_speedups)
     print(f"Speedup list: [{speedup_str}]")
     
-    return speedups
+    return full_speedups
 
 
 def main():

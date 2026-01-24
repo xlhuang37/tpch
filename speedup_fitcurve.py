@@ -2,26 +2,31 @@
 """
 Speedup Curve Fitting Tool
 
-Fits Amdahl's law to sparse speedup samples and generates a complete speedup curve.
+Fits scalability models to sparse speedup samples and generates a complete speedup curve.
+
+Supported models:
+- Amdahl's Law: Speedup(N) = 1 / (s + (1-s)/N)
+  where s is the serial fraction of the workload.
+  
+- Universal Scalability Law (USL): Speedup(N) = N / (1 + σ(N-1) + κ*N*(N-1))
+  where σ (sigma) is the contention parameter and κ (kappa) is the coherency parameter.
+  USL can model speedup degradation at high thread counts (retrograde behavior).
 
 Input format (stdin or file): Each line contains "speedup cores" (space or comma separated)
 Output format: One speedup value per line (64 lines by default)
-
-Amdahl's Law: Speedup(N) = 1 / (s + (1-s)/N)
-where s is the serial fraction of the workload.
 
 If the speedup increment becomes too low (plateau detected), the fitted curve
 is flattened to that plateau value.
 
 Usage:
-    # From stdin
+    # From stdin (default: Amdahl's law)
     echo "1.0 1
     3.5 4
     7.2 8
     12.1 16" | python speedup_fitcurve.py
     
-    # From file
-    python speedup_fitcurve.py --input samples.txt --output speedup.csv
+    # From file with USL model
+    python speedup_fitcurve.py --input samples.txt --model usl
     
     # Custom max threads
     python speedup_fitcurve.py --input samples.txt --max-threads 32
@@ -42,6 +47,10 @@ except ImportError:
     HAS_SCIPY = False
 
 
+# =============================================================================
+# Scalability Models
+# =============================================================================
+
 def amdahl_law(n: np.ndarray, s: float) -> np.ndarray:
     """
     Amdahl's Law speedup function.
@@ -56,71 +65,124 @@ def amdahl_law(n: np.ndarray, s: float) -> np.ndarray:
     return 1.0 / (s + (1.0 - s) / n)
 
 
-def amdahl_law_with_overhead(n: np.ndarray, s: float, overhead: float) -> np.ndarray:
+def usl_law(n: np.ndarray, sigma: float, kappa: float) -> np.ndarray:
     """
-    Modified Amdahl's Law with parallelization overhead.
+    Universal Scalability Law (USL) speedup function.
     
     Args:
         n: Number of processors/threads
-        s: Serial fraction (0 <= s <= 1)
-        overhead: Per-thread overhead factor
+        sigma: Contention/serialization parameter (0 <= sigma <= 1)
+        kappa: Coherency/crosstalk parameter (0 <= kappa)
     
     Returns:
-        Speedup accounting for overhead
+        Speedup = N / (1 + sigma*(N-1) + kappa*N*(N-1))
+    
+    Note: USL can model retrograde behavior where speedup decreases at high N.
     """
-    base_speedup = 1.0 / (s + (1.0 - s) / n)
-    overhead_factor = 1.0 + overhead * (n - 1)
-    return base_speedup / overhead_factor
+    return n / (1.0 + sigma * (n - 1) + kappa * n * (n - 1))
 
 
-def fit_amdahl(thread_counts: List[int], speedups: List[float], 
-               use_overhead: bool = False) -> Tuple[float, Optional[float]]:
+def amdahl_law_scalar(n: float, s: float) -> float:
+    """Scalar version of Amdahl's law for use without numpy."""
+    return 1.0 / (s + (1.0 - s) / n)
+
+
+def usl_law_scalar(n: float, sigma: float, kappa: float) -> float:
+    """Scalar version of USL for use without numpy."""
+    return n / (1.0 + sigma * (n - 1) + kappa * n * (n - 1))
+
+
+# =============================================================================
+# Curve Fitting
+# =============================================================================
+
+def fit_amdahl(thread_counts: List[int], speedups: List[float]) -> Tuple[float, dict]:
     """
     Fit Amdahl's law to observed speedup data.
     
     Args:
         thread_counts: List of thread counts sampled
         speedups: Corresponding observed speedups
-        use_overhead: If True, fit model with overhead term
     
     Returns:
-        (serial_fraction, overhead) - overhead is None if use_overhead=False
+        (serial_fraction, params_dict)
     """
     if not HAS_SCIPY:
         # Fallback: estimate s from asymptotic speedup
         max_speedup = max(speedups)
         s = 1.0 / max_speedup if max_speedup > 0 else 1.0
-        return s, None
+        return s, {'s': s}
     
     x = np.array(thread_counts, dtype=float)
     y = np.array(speedups, dtype=float)
     
     try:
-        if use_overhead:
-            # Fit with overhead parameter
-            popt, _ = curve_fit(
-                amdahl_law_with_overhead, x, y,
-                p0=[0.1, 0.001],  # Initial guess: 10% serial, small overhead
-                bounds=([0.0, 0.0], [1.0, 0.1]),  # s in [0,1], overhead in [0, 0.1]
-                maxfev=5000
-            )
-            return popt[0], popt[1]
-        else:
-            # Fit standard Amdahl's law
-            popt, _ = curve_fit(
-                amdahl_law, x, y,
-                p0=[0.1],  # Initial guess: 10% serial fraction
-                bounds=([0.0], [1.0]),  # s must be in [0, 1]
-                maxfev=5000
-            )
-            return popt[0], None
+        popt, _ = curve_fit(
+            amdahl_law, x, y,
+            p0=[0.1],  # Initial guess: 10% serial fraction
+            bounds=([0.0], [1.0]),  # s must be in [0, 1]
+            maxfev=5000
+        )
+        return popt[0], {'s': popt[0]}
     except Exception as e:
-        print(f"Warning: Curve fitting failed ({e}), using fallback estimation", file=sys.stderr)
-        # Fallback estimation
+        print(f"Warning: Amdahl fitting failed ({e}), using fallback estimation", file=sys.stderr)
         max_speedup = max(speedups)
         s = 1.0 / max_speedup if max_speedup > 0 else 1.0
-        return min(max(s, 0.0), 1.0), None
+        s = min(max(s, 0.0), 1.0)
+        return s, {'s': s}
 
+
+def fit_usl(thread_counts: List[int], speedups: List[float]) -> Tuple[Tuple[float, float], dict]:
+    """
+    Fit Universal Scalability Law to observed speedup data.
+    
+    Args:
+        thread_counts: List of thread counts sampled
+        speedups: Corresponding observed speedups
+    
+    Returns:
+        ((sigma, kappa), params_dict)
+    """
+    if not HAS_SCIPY:
+        # Fallback: estimate sigma from max speedup, assume kappa=0
+        max_speedup = max(speedups)
+        max_n = max(thread_counts)
+        # From USL with kappa=0: Speedup = N / (1 + sigma*(N-1))
+        # At max_n: max_speedup = max_n / (1 + sigma*(max_n-1))
+        # Solving: sigma = (max_n/max_speedup - 1) / (max_n - 1)
+        if max_n > 1 and max_speedup > 0:
+            sigma = (max_n / max_speedup - 1) / (max_n - 1)
+            sigma = max(0.0, min(1.0, sigma))
+        else:
+            sigma = 0.1
+        return (sigma, 0.0), {'sigma': sigma, 'kappa': 0.0}
+    
+    x = np.array(thread_counts, dtype=float)
+    y = np.array(speedups, dtype=float)
+    
+    try:
+        popt, _ = curve_fit(
+            usl_law, x, y,
+            p0=[0.1, 0.0001],  # Initial guess
+            bounds=([0.0, 0.0], [1.0, 0.1]),  # sigma in [0,1], kappa in [0, 0.1]
+            maxfev=5000
+        )
+        return (popt[0], popt[1]), {'sigma': popt[0], 'kappa': popt[1]}
+    except Exception as e:
+        print(f"Warning: USL fitting failed ({e}), using fallback estimation", file=sys.stderr)
+        max_speedup = max(speedups)
+        max_n = max(thread_counts)
+        if max_n > 1 and max_speedup > 0:
+            sigma = (max_n / max_speedup - 1) / (max_n - 1)
+            sigma = max(0.0, min(1.0, sigma))
+        else:
+            sigma = 0.1
+        return (sigma, 0.0), {'sigma': sigma, 'kappa': 0.0}
+
+
+# =============================================================================
+# Plateau Detection
+# =============================================================================
 
 def detect_plateau(thread_counts: List[int], speedups: List[float], 
                    threshold: float = 0.05) -> Tuple[bool, int, float]:
@@ -152,10 +214,14 @@ def detect_plateau(thread_counts: List[int], speedups: List[float],
     return False, thread_counts[-1], speedups[-1]
 
 
+# =============================================================================
+# Curve Generation
+# =============================================================================
+
 def generate_full_speedup_curve(
     max_threads: int,
-    serial_fraction: float,
-    overhead: Optional[float],
+    model: str,
+    params: dict,
     plateau_thread: int,
     plateau_speedup: float,
     has_plateau: bool
@@ -172,20 +238,30 @@ def generate_full_speedup_curve(
             # Flatten at plateau value
             speedup = plateau_speedup
         else:
-            # Use fitted Amdahl's law
-            if HAS_SCIPY:
-                if overhead is not None:
-                    speedup = float(amdahl_law_with_overhead(np.array([n]), serial_fraction, overhead)[0])
+            # Use fitted model
+            if model == 'amdahl':
+                s = params['s']
+                if HAS_SCIPY:
+                    speedup = float(amdahl_law(np.array([n]), s)[0])
                 else:
-                    speedup = float(amdahl_law(np.array([n]), serial_fraction)[0])
+                    speedup = amdahl_law_scalar(n, s)
+            elif model == 'usl':
+                sigma, kappa = params['sigma'], params['kappa']
+                if HAS_SCIPY:
+                    speedup = float(usl_law(np.array([n]), sigma, kappa)[0])
+                else:
+                    speedup = usl_law_scalar(n, sigma, kappa)
             else:
-                # Fallback without numpy
-                speedup = 1.0 / (serial_fraction + (1.0 - serial_fraction) / n)
+                raise ValueError(f"Unknown model: {model}")
         
         speedups.append(speedup)
     
     return speedups
 
+
+# =============================================================================
+# Input Parsing
+# =============================================================================
 
 def parse_input(lines: List[str]) -> Tuple[List[int], List[float]]:
     """
@@ -220,16 +296,20 @@ def parse_input(lines: List[str]) -> Tuple[List[int], List[float]]:
     return thread_counts, speedups
 
 
+# =============================================================================
+# Main Fitting Logic
+# =============================================================================
+
 def fit_and_generate(
     thread_counts: List[int],
     speedups: List[float],
     max_threads: int,
     plateau_threshold: float,
-    use_overhead: bool,
+    model: str,
     verbose: bool
 ) -> Tuple[List[float], dict]:
     """
-    Fit Amdahl's law and generate full speedup curve.
+    Fit scalability model and generate full speedup curve.
     
     Returns:
         (full_speedups, metadata_dict)
@@ -245,25 +325,40 @@ def fit_and_generate(
         else:
             print("No plateau detected", file=sys.stderr)
     
-    # Fit Amdahl's law
-    serial_fraction, overhead = fit_amdahl(thread_counts, speedups, use_overhead)
-    
-    if verbose:
-        print(f"Fitted serial fraction: {serial_fraction:.4f}", file=sys.stderr)
-        if overhead is not None:
-            print(f"Fitted overhead: {overhead:.6f}", file=sys.stderr)
-        theoretical_max = 1.0 / serial_fraction if serial_fraction > 0 else float('inf')
-        print(f"Theoretical max speedup (Amdahl): {theoretical_max:.2f}", file=sys.stderr)
+    # Fit model
+    if model == 'amdahl':
+        serial_fraction, params = fit_amdahl(thread_counts, speedups)
+        if verbose:
+            print(f"Model: Amdahl's Law", file=sys.stderr)
+            print(f"Fitted serial fraction (s): {serial_fraction:.4f}", file=sys.stderr)
+            theoretical_max = 1.0 / serial_fraction if serial_fraction > 0 else float('inf')
+            print(f"Theoretical max speedup: {theoretical_max:.2f}", file=sys.stderr)
+    elif model == 'usl':
+        (sigma, kappa), params = fit_usl(thread_counts, speedups)
+        if verbose:
+            print(f"Model: Universal Scalability Law (USL)", file=sys.stderr)
+            print(f"Fitted sigma (contention): {sigma:.6f}", file=sys.stderr)
+            print(f"Fitted kappa (coherency): {kappa:.6f}", file=sys.stderr)
+            # Peak speedup for USL occurs at N* = sqrt((1-sigma)/kappa) if kappa > 0
+            if kappa > 0 and sigma < 1:
+                n_peak = ((1 - sigma) / kappa) ** 0.5
+                peak_speedup = usl_law_scalar(n_peak, sigma, kappa)
+                print(f"Peak speedup: {peak_speedup:.2f} at N={n_peak:.1f} threads", file=sys.stderr)
+            else:
+                theoretical_max = 1.0 / sigma if sigma > 0 else float('inf')
+                print(f"Theoretical max speedup (sigma only): {theoretical_max:.2f}", file=sys.stderr)
+    else:
+        raise ValueError(f"Unknown model: {model}")
     
     # Generate full speedup curve
     full_speedups = generate_full_speedup_curve(
-        max_threads, serial_fraction, overhead,
+        max_threads, model, params,
         plateau_thread, plateau_speedup, has_plateau
     )
     
     metadata = {
-        'serial_fraction': serial_fraction,
-        'overhead': overhead,
+        'model': model,
+        'params': params,
         'has_plateau': has_plateau,
         'plateau_thread': plateau_thread,
         'plateau_speedup': plateau_speedup,
@@ -274,9 +369,13 @@ def fit_and_generate(
     return full_speedups, metadata
 
 
+# =============================================================================
+# CLI
+# =============================================================================
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Fit Amdahl's law to speedup samples and generate full curve"
+        description="Fit scalability model to speedup samples and generate full curve"
     )
     
     # Input/output
@@ -284,13 +383,15 @@ def main():
     parser.add_argument("--output", "-o", help="Output file (default: stdout)")
     parser.add_argument("--meta-output", "-m", help="Metadata output file (optional)")
     
+    # Model selection
+    parser.add_argument("--model", choices=['amdahl', 'usl'], default='amdahl',
+                        help="Scalability model to fit (default: amdahl)")
+    
     # Fitting parameters
     parser.add_argument("--max-threads", "-t", type=int, default=64,
                         help="Maximum number of threads for output curve (default: 64)")
     parser.add_argument("--plateau-threshold", "-p", type=float, default=0.001,
                         help="Relative speedup improvement threshold for plateau detection (default: 0.001)")
-    parser.add_argument("--with-overhead", action="store_true",
-                        help="Use Amdahl's law model with parallelization overhead term")
     
     # Output options
     parser.add_argument("--verbose", "-v", action="store_true", 
@@ -323,7 +424,7 @@ def main():
     # Fit and generate
     full_speedups, metadata = fit_and_generate(
         thread_counts, speedups,
-        args.max_threads, args.plateau_threshold, args.with_overhead, args.verbose
+        args.max_threads, args.plateau_threshold, args.model, args.verbose
     )
     
     # Write output
@@ -338,9 +439,9 @@ def main():
     # Write metadata if requested
     if args.meta_output:
         with open(args.meta_output, 'w') as f:
-            f.write(f"serial_fraction: {metadata['serial_fraction']:.6f}\n")
-            if metadata['overhead'] is not None:
-                f.write(f"overhead: {metadata['overhead']:.6f}\n")
+            f.write(f"model: {metadata['model']}\n")
+            for key, value in metadata['params'].items():
+                f.write(f"{key}: {value:.6f}\n")
             f.write(f"has_plateau: {metadata['has_plateau']}\n")
             f.write(f"plateau_thread: {metadata['plateau_thread']}\n")
             f.write(f"plateau_speedup: {metadata['plateau_speedup']:.4f}\n")
@@ -348,13 +449,16 @@ def main():
             f.write(f"sampled_speedups: {metadata['sampled_speedups']}\n")
 
 
-# Exported functions for use as a library
+# =============================================================================
+# Library API
+# =============================================================================
+
 def fit_speedup_curve(
     thread_counts: List[int],
     speedups: List[float],
     max_threads: int = 64,
     plateau_threshold: float = 0.001,
-    use_overhead: bool = False
+    model: str = 'amdahl'
 ) -> Tuple[List[float], dict]:
     """
     Library function to fit speedup curve.
@@ -364,14 +468,14 @@ def fit_speedup_curve(
         speedups: Corresponding observed speedups
         max_threads: Maximum threads for output curve
         plateau_threshold: Threshold for plateau detection
-        use_overhead: Use model with overhead term
+        model: 'amdahl' or 'usl'
     
     Returns:
         (full_speedups, metadata_dict)
     """
     return fit_and_generate(
         thread_counts, speedups,
-        max_threads, plateau_threshold, use_overhead, verbose=False
+        max_threads, plateau_threshold, model, verbose=False
     )
 
 

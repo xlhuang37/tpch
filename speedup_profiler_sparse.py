@@ -3,7 +3,11 @@
 Sparse Speedup Profiler for ClickHouse Queries
 
 Similar to speedup_profiler.py but samples at scattered thread counts (e.g., 1,2,4,8,12,16,...)
-and uses speedup_fitcurve to fit Amdahl's law and interpolate the full speedup curve.
+and uses speedup_fitcurve to fit a scalability model and interpolate the full speedup curve.
+
+Supported models:
+- amdahl: Amdahl's Law (default)
+- usl: Universal Scalability Law
 
 Usage:
     # Test a single query file
@@ -17,6 +21,9 @@ Usage:
     
     # Custom sample points
     python speedup_profiler_sparse.py --query q.sql --sample-points 1,2,4,8,16,32,64
+    
+    # Use USL model instead of Amdahl
+    python speedup_profiler_sparse.py --query q.sql --model usl
     
     # Adjust plateau threshold (default 0.001 = 0.1% improvement threshold)
     python speedup_profiler_sparse.py --query q.sql --plateau-threshold 0.1
@@ -126,7 +133,7 @@ def process_query_file(
     repeat: int, 
     warmup: int,
     plateau_threshold: float,
-    use_overhead: bool,
+    model: str,
     verbose: bool
 ) -> List[float]:
     """Process a single query file and save speedup results."""
@@ -143,6 +150,7 @@ def process_query_file(
         print(f"Repetitions per sample: {repeat}")
         print(f"Warmup iterations: {warmup}")
         print(f"Plateau threshold: {plateau_threshold:.1%}")
+        print(f"Model: {model}")
         print("-" * 60)
     
     # Run sparse measurements
@@ -163,7 +171,7 @@ def process_query_file(
     # Use speedup_fitcurve to fit and generate full curve
     full_speedups, metadata = fit_speedup_curve(
         thread_counts, speedups_sampled,
-        max_threads, plateau_threshold, use_overhead
+        max_threads, plateau_threshold, model
     )
     
     if verbose:
@@ -171,11 +179,16 @@ def process_query_file(
             print(f"Plateau detected at {metadata['plateau_thread']} threads (speedup: {metadata['plateau_speedup']:.2f})")
         else:
             print("No plateau detected")
-        print(f"Fitted serial fraction: {metadata['serial_fraction']:.4f}")
-        if metadata['overhead'] is not None:
-            print(f"Fitted overhead: {metadata['overhead']:.6f}")
-        theoretical_max = 1.0 / metadata['serial_fraction'] if metadata['serial_fraction'] > 0 else float('inf')
-        print(f"Theoretical max speedup (Amdahl): {theoretical_max:.2f}")
+        
+        # Print model-specific parameters
+        params = metadata['params']
+        if model == 'amdahl':
+            print(f"Fitted serial fraction (s): {params['s']:.4f}")
+            theoretical_max = 1.0 / params['s'] if params['s'] > 0 else float('inf')
+            print(f"Theoretical max speedup: {theoretical_max:.2f}")
+        elif model == 'usl':
+            print(f"Fitted sigma (contention): {params['sigma']:.6f}")
+            print(f"Fitted kappa (coherency): {params['kappa']:.6f}")
     
     # Print fitted results
     if verbose:
@@ -218,9 +231,9 @@ def process_query_file(
     # Save fitting metadata
     meta_path = f"{base_path}_speedup_meta.txt"
     with open(meta_path, 'w') as f:
-        f.write(f"serial_fraction: {metadata['serial_fraction']:.6f}\n")
-        if metadata['overhead'] is not None:
-            f.write(f"overhead: {metadata['overhead']:.6f}\n")
+        f.write(f"model: {metadata['model']}\n")
+        for key, value in metadata['params'].items():
+            f.write(f"{key}: {value:.6f}\n")
         f.write(f"has_plateau: {metadata['has_plateau']}\n")
         f.write(f"plateau_thread: {metadata['plateau_thread']}\n")
         f.write(f"plateau_speedup: {metadata['plateau_speedup']:.4f}\n")
@@ -242,7 +255,7 @@ def process_query_string(
     repeat: int, 
     warmup: int,
     plateau_threshold: float,
-    use_overhead: bool,
+    model: str,
     verbose: bool
 ) -> List[float]:
     """Process an inline query string (no output file saved)."""
@@ -257,6 +270,7 @@ def process_query_string(
         print(f"Repetitions per sample: {repeat}")
         print(f"Warmup iterations: {warmup}")
         print(f"Plateau threshold: {plateau_threshold:.1%}")
+        print(f"Model: {model}")
         print("-" * 60)
     
     # Run sparse measurements
@@ -277,7 +291,7 @@ def process_query_string(
     # Use speedup_fitcurve to fit and generate full curve
     full_speedups, metadata = fit_speedup_curve(
         thread_counts, speedups_sampled,
-        max_threads, plateau_threshold, use_overhead
+        max_threads, plateau_threshold, model
     )
     
     if verbose:
@@ -285,11 +299,16 @@ def process_query_string(
             print(f"Plateau detected at {metadata['plateau_thread']} threads (speedup: {metadata['plateau_speedup']:.2f})")
         else:
             print("No plateau detected")
-        print(f"Fitted serial fraction: {metadata['serial_fraction']:.4f}")
-        if metadata['overhead'] is not None:
-            print(f"Fitted overhead: {metadata['overhead']:.6f}")
-        theoretical_max = 1.0 / metadata['serial_fraction'] if metadata['serial_fraction'] > 0 else float('inf')
-        print(f"Theoretical max speedup (Amdahl): {theoretical_max:.2f}")
+        
+        # Print model-specific parameters
+        params = metadata['params']
+        if model == 'amdahl':
+            print(f"Fitted serial fraction (s): {params['s']:.4f}")
+            theoretical_max = 1.0 / params['s'] if params['s'] > 0 else float('inf')
+            print(f"Theoretical max speedup: {theoretical_max:.2f}")
+        elif model == 'usl':
+            print(f"Fitted sigma (contention): {params['sigma']:.6f}")
+            print(f"Fitted kappa (coherency): {params['kappa']:.6f}")
     
     # Print fitted results
     if verbose:
@@ -318,7 +337,7 @@ def parse_sample_points(s: str) -> List[int]:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sparse speedup profiler with Amdahl's law curve fitting"
+        description="Sparse speedup profiler with scalability model curve fitting"
     )
     
     # Query specification (one of these required)
@@ -341,8 +360,8 @@ def main():
     # Fitting parameters
     parser.add_argument("--plateau-threshold", "-p", type=float, default=0.001,
                         help="Relative speedup improvement threshold for plateau detection (default: 0.001)")
-    parser.add_argument("--with-overhead", action="store_true",
-                        help="Use Amdahl's law model with parallelization overhead term")
+    parser.add_argument("--model", "-m", choices=['amdahl', 'usl'], default='amdahl',
+                        help="Scalability model to fit: amdahl (default) or usl")
     
     # ClickHouse connection
     parser.add_argument("--host", default="localhost", help="ClickHouse host (default: localhost)")
@@ -378,7 +397,7 @@ def main():
             process_query_file(
                 query_file, args.host, args.port, 
                 args.max_threads, sample_points, args.repeat, args.warmup,
-                args.plateau_threshold, args.with_overhead, verbose
+                args.plateau_threshold, args.model, verbose
             )
             if verbose and len(query_files) > 1:
                 print()
@@ -387,7 +406,7 @@ def main():
         process_query_string(
             args.query_string, args.host, args.port,
             args.max_threads, sample_points, args.repeat, args.warmup,
-            args.plateau_threshold, args.with_overhead, verbose
+            args.plateau_threshold, args.model, verbose
         )
 
 

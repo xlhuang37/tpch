@@ -169,14 +169,18 @@ def process_query_file(query_file: str, host: str, port: int,
     # Save speedup values with vanilla naming
     output_path = f"{base_path}_vanilla_speedup.csv"
     with open(output_path, 'w') as f:
+        core = 1
         for s in speedups:
-            f.write(f"{s:.4f}\n")
+            f.write(f"{core} {s:.4f}\n")
+            core += 1
     
     # Save speedup values with vanilla naming
     output_path = f"{base_path}_curved_speedup.csv"
     with open(output_path, 'w') as f:
+        core = 1
         for s in full_speedups:
-            f.write(f"{s:.4f}\n")
+            f.write(f"{core} {s:.4f}\n")
+            core += 1
 
     if verbose:
         print(f"Speedup values saved to: {output_path}")

@@ -196,6 +196,8 @@ def generate_full_speedup_curve(
             speedup = usl_law_scalar(n, sigma, kappa)
         else:
             raise ValueError(f"Unknown model: {model}")
+        
+        speedups.append(speedup)
     
     return speedups
 

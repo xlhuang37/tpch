@@ -322,8 +322,35 @@ def process_query_string(
 
 
 def parse_sample_points(s: str) -> List[int]:
-    """Parse comma-separated sample points string."""
-    return sorted(set(int(x.strip()) for x in s.split(',')))
+    """
+    Parse sample points string with support for ranges.
+    
+    Supports:
+    - Comma-separated values: "1,2,4,8"
+    - Ranges with dash: "4-8" means 4,5,6,7,8
+    - Combined: "1,2,4-8,16" means 1,2,4,5,6,7,8,16
+    
+    Examples:
+        "1,2,4-8" -> [1, 2, 4, 5, 6, 7, 8]
+        "1,4,8-12,16" -> [1, 4, 8, 9, 10, 11, 12, 16]
+    """
+    result = set()
+    parts = s.split(',')
+    
+    for part in parts:
+        part = part.strip()
+        if '-' in part:
+            # Handle range like "4-8"
+            range_parts = part.split('-')
+            if len(range_parts) == 2:
+                start = int(range_parts[0].strip())
+                end = int(range_parts[1].strip())
+                result.update(range(start, end + 1))
+        else:
+            # Single value
+            result.add(int(part))
+    
+    return sorted(result)
 
 
 def main():

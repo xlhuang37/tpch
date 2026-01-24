@@ -43,7 +43,7 @@ from speedup_fitcurve import fit_speedup_curve
 
 
 # Default sample points for sparse profiling
-DEFAULT_SAMPLE_POINTS = [1, 2, 4, 8, 12, 16, 20, 24, 28, 32]
+DEFAULT_SAMPLE_POINTS = [1, 2, 4, 6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64]
 
 
 def read_query_file(filepath: str) -> str:
@@ -128,7 +128,6 @@ def process_query_file(
     query_file: str, 
     host: str, 
     port: int,
-    max_threads: int,
     sample_points: List[int],
     repeat: int, 
     warmup: int,
@@ -141,6 +140,7 @@ def process_query_file(
     
     # Filter sample points to be within max_threads and include 1
     valid_samples = sorted(set([1] + [p for p in sample_points if p <= max_threads]))
+    max_threads = max(valid_samples)
     
     if verbose:
         print(f"Query: {query_file}")
@@ -250,7 +250,6 @@ def process_query_string(
     query: str, 
     host: str, 
     port: int,
-    max_threads: int,
     sample_points: List[int],
     repeat: int, 
     warmup: int,
@@ -260,7 +259,8 @@ def process_query_string(
 ) -> List[float]:
     """Process an inline query string (no output file saved)."""
     # Filter sample points
-    valid_samples = sorted(set([1] + [p for p in sample_points if p <= max_threads]))
+    valid_samples = sorted(set([1] + [p for p in sample_points]))
+    max_threads = max(valid_samples)
     
     if verbose:
         print(f"Query: inline query")
@@ -347,8 +347,6 @@ def main():
     query_group.add_argument("--query-string", "-Q", help="SQL query string directly")
     
     # Test parameters
-    parser.add_argument("--max-threads", "-t", type=int, default=32,
-                        help="Maximum number of threads for output curve (default: 64)")
     parser.add_argument("--sample-points", "-s", type=str, 
                         default="1,2,4,8,12,16,24,32,48,64",
                         help="Comma-separated thread counts to sample (default: 1,2,4,8,12,16,24,32,48,64)")
@@ -396,7 +394,7 @@ def main():
         for query_file in query_files:
             process_query_file(
                 query_file, args.host, args.port, 
-                args.max_threads, sample_points, args.repeat, args.warmup,
+                sample_points, args.repeat, args.warmup,
                 args.plateau_threshold, args.model, verbose
             )
             if verbose and len(query_files) > 1:
@@ -405,7 +403,7 @@ def main():
         # Inline query string
         process_query_string(
             args.query_string, args.host, args.port,
-            args.max_threads, sample_points, args.repeat, args.warmup,
+            sample_points, args.repeat, args.warmup,
             args.plateau_threshold, args.model, verbose
         )
 

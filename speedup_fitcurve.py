@@ -8,8 +8,8 @@ Supported models:
 - Amdahl's Law: Speedup(N) = 1 / (s + (1-s)/N)
   where s is the serial fraction of the workload.
   
-- Universal Scalability Law (USL): Speedup(N) = N / (1 + σ(N-1) + κ*N*(N-1))
-  where σ (sigma) is the contention parameter and κ (kappa) is the coherency parameter.
+- Universal Scalability Law (USL): Speedup(N) = N / (1 + o(N-1) + κ*N*(N-1))
+  where o(sigma) is the contention parameter and κ (kappa) is the coherency parameter.
   USL can model speedup degradation at high thread counts (retrograde behavior).
 
 Input format (stdin or file): Each line contains "speedup cores" (space or comma separated)
@@ -456,9 +456,9 @@ def main():
 def fit_speedup_curve(
     thread_counts: List[int],
     speedups: List[float],
-    max_threads: int = 64,
+    max_threads: int = 32,
     plateau_threshold: float = 0.001,
-    model: str = 'amdahl'
+    model: str = 'usl'
 ) -> Tuple[List[float], dict]:
     """
     Library function to fit speedup curve.

@@ -43,7 +43,7 @@ from speedup_fitcurve import fit_speedup_curve
 
 
 # Default sample points for sparse profiling
-DEFAULT_SAMPLE_POINTS = [1, 2, 4, 8, 12, 16, 24, 32, 48, 64]
+DEFAULT_SAMPLE_POINTS = [1, 2, 4, 8, 12, 16, 20, 24, 28, 32]
 
 
 def read_query_file(filepath: str) -> str:
@@ -347,20 +347,20 @@ def main():
     query_group.add_argument("--query-string", "-Q", help="SQL query string directly")
     
     # Test parameters
-    parser.add_argument("--max-threads", "-t", type=int, default=64,
+    parser.add_argument("--max-threads", "-t", type=int, default=32,
                         help="Maximum number of threads for output curve (default: 64)")
     parser.add_argument("--sample-points", "-s", type=str, 
                         default="1,2,4,8,12,16,24,32,48,64",
                         help="Comma-separated thread counts to sample (default: 1,2,4,8,12,16,24,32,48,64)")
-    parser.add_argument("--repeat", "-r", type=int, default=5,
+    parser.add_argument("--repeat", "-r", type=int, default=8,
                         help="Number of repetitions per sample point (default: 5)")
-    parser.add_argument("--warmup", "-w", type=int, default=5,
+    parser.add_argument("--warmup", "-w", type=int, default=1,
                         help="Number of warmup runs before measurement (default: 5)")
     
     # Fitting parameters
     parser.add_argument("--plateau-threshold", "-p", type=float, default=0.001,
                         help="Relative speedup improvement threshold for plateau detection (default: 0.001)")
-    parser.add_argument("--model", "-m", choices=['amdahl', 'usl'], default='amdahl',
+    parser.add_argument("--model", "-m", choices=['amdahl', 'usl'], default='usl',
                         help="Scalability model to fit: amdahl (default) or usl")
     
     # ClickHouse connection

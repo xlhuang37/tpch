@@ -11,7 +11,6 @@ fi
 SHELL_PID=$PPID
 
 echo "Attaching Shell (PID: $SHELL_PID) to Low Performance Group..."
-echo "Config: Cores 120-127, Memory 4GB"
 
 echo $SHELL_PID | sudo tee "$CGROUP_PATH/cgroup.procs" > /dev/null
 

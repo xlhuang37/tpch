@@ -13,7 +13,6 @@ fi
 SHELL_PID=$PPID
 
 echo "Attaching Shell (PID: $SHELL_PID) to High Performance Group..."
-echo "Config: Cores 0-119, Memory 250GB"
 
 # Move the shell PID into the cgroup
 # We use sudo tee because redirection (>) happens as the user, not root

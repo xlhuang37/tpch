@@ -153,13 +153,13 @@ def process_query_file(
     query = read_query_file(query_file)
     
     # Filter sample points to be within max_threads and include 1
-    max_threads = max(valid_samples)
+    max_threads = max(sample_points)
     
     if verbose:
         print(f"Query: {query_file}")
         print(f"ClickHouse: {host}:{port}")
         print(f"Max threads: {max_threads}")
-        print(f"Sample points: {valid_samples}")
+        print(f"Sample points: {sample_points}")
         print(f"Repetitions per sample: {repeat}")
         print(f"Warmup iterations: {warmup}")
         print(f"Model: {model}")
@@ -167,7 +167,7 @@ def process_query_file(
     
     # Run sparse measurements
     thread_counts, speedups_sampled, avg_times = measure_speedup_sparse(
-        host, port, query, valid_samples, repeat, warmup, verbose
+        host, port, query, sample_points, repeat, warmup, verbose
     )
     
     if verbose:
@@ -270,13 +270,13 @@ def process_query_string(
 ) -> List[float]:
     """Process an inline query string (no output file saved)."""
     # Filter sample points
-    max_threads = max(valid_samples)
+    max_threads = max(sample_points)
     
     if verbose:
         print(f"Query: inline query")
         print(f"ClickHouse: {host}:{port}")
         print(f"Max threads: {max_threads}")
-        print(f"Sample points: {valid_samples}")
+        print(f"Sample points: {sample_points}")
         print(f"Repetitions per sample: {repeat}")
         print(f"Warmup iterations: {warmup}")
         print(f"Model: {model}")
@@ -284,7 +284,7 @@ def process_query_string(
     
     # Run sparse measurements
     thread_counts, speedups_sampled, avg_times = measure_speedup_sparse(
-        host, port, query, valid_samples, repeat, warmup, verbose
+        host, port, query, sample_points, repeat, warmup, verbose
     )
     
     if verbose:

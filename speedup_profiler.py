@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Speedup Profiler for ClickHouse Queries
+Speedup Profiler for ClickHouse Queries (Vanilla/Dense Sampling)
 
-Measures query execution time across different thread counts to generate
+Measures query execution time across ALL thread counts from 1 to max_threads to generate
 a speedup curve. Speedup is calculated as: runtime(1 thread) / runtime(N threads)
+
+Output files use "vanilla" naming to distinguish from sparse profiler results.
 
 Usage:
     # Test a single query file
@@ -142,11 +144,11 @@ def process_query_file(query_file: str, host: str, port: int,
     speedup_str = ", ".join(f"{s:.2f}" for s in speedups)
     print(f"Speedup list: [{speedup_str}]")
     
-    # Save to file next to the original query file
+    # Save to file next to the original query file with "vanilla" prefix
     base_path = os.path.splitext(query_file)[0]
     
-    # Save speedup values (only speedups, no runtime at end)
-    output_path = f"{base_path}_speedup.csv"
+    # Save speedup values with vanilla naming
+    output_path = f"{base_path}_vanilla_speedup.csv"
     with open(output_path, 'w') as f:
         for s in speedups:
             f.write(f"{s:.4f}\n")
@@ -154,13 +156,15 @@ def process_query_file(query_file: str, host: str, port: int,
     if verbose:
         print(f"Speedup values saved to: {output_path}")
     
-    # Save 1-core runtime in separate file (query size estimate)
-    runtime_path = f"{base_path}_runtime.txt"
+    # Save ALL sampled runtimes (cores and avg_time for each)
+    runtime_path = f"{base_path}_vanilla_runtime.txt"
     with open(runtime_path, 'w') as f:
-        f.write(f"{avg_times[0]:.4f}\n")
+        f.write("# cores avg_runtime_seconds\n")
+        for i, avg_time in enumerate(avg_times, 1):
+            f.write(f"{i} {avg_time:.4f}\n")
     
     if verbose:
-        print(f"1-core runtime saved to: {runtime_path}")
+        print(f"All runtimes saved to: {runtime_path}")
     
     return speedups
 
@@ -201,7 +205,7 @@ def process_query_string(query: str, host: str, port: int,
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Profile query speedup across different thread counts in ClickHouse"
+        description="Profile query speedup across different thread counts in ClickHouse (vanilla/dense sampling)"
     )
     
     # Query specification (one of these required)
@@ -216,7 +220,7 @@ def main():
     parser.add_argument("--repeat", "-r", type=int, default=5,
                        help="Number of repetitions per thread count (default: 5)")
     parser.add_argument("--warmup", "-w", type=int, default=5,
-                       help="Number of warmup runs before measurement (default: 1)")
+                       help="Number of warmup runs before measurement (default: 5)")
     
     # ClickHouse connection
     parser.add_argument("--host", default="localhost", help="ClickHouse host (default: localhost)")

@@ -5,6 +5,11 @@ Sparse Speedup Profiler for ClickHouse Queries
 Similar to speedup_profiler.py but samples at scattered thread counts (e.g., 1,2,4,8,12,16,...)
 and uses speedup_fitcurve to fit a scalability model and interpolate the full speedup curve.
 
+Output is saved in a timestamped folder containing:
+- speedup.csv: The fitted speedup curve
+- runtime.txt: Average runtimes for all sampled core counts
+- metadata.txt: Run configuration (model, sample points, fitted parameters, etc.)
+
 Supported models:
 - amdahl: Amdahl's Law (default)
 - usl: Universal Scalability Law
@@ -34,6 +39,7 @@ import glob
 import os
 import time
 import sys
+from datetime import datetime
 from typing import List, Tuple
 import urllib.request
 import urllib.parse
@@ -124,6 +130,18 @@ def measure_speedup_sparse(
     return sample_points, speedups, avg_times
 
 
+def create_output_folder(base_path: str, model: str) -> str:
+    """
+    Create a timestamped output folder for sparse profiler results.
+    
+    Returns the path to the created folder.
+    """
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    folder_name = f"{base_path}_sparse_{model}_{timestamp}"
+    os.makedirs(folder_name, exist_ok=True)
+    return folder_name
+
+
 def process_query_file(
     query_file: str, 
     host: str, 
@@ -135,7 +153,7 @@ def process_query_file(
     model: str,
     verbose: bool
 ) -> List[float]:
-    """Process a single query file and save speedup results."""
+    """Process a single query file and save speedup results to timestamped folder."""
     query = read_query_file(query_file)
     
     # Filter sample points to be within max_threads and include 1
@@ -208,40 +226,65 @@ def process_query_file(
     speedup_str = ", ".join(f"{s:.2f}" for s in full_speedups)
     print(f"Speedup list: [{speedup_str}]")
     
-    # Save to file next to the original query file
+    # Create timestamped output folder
     base_path = os.path.splitext(query_file)[0]
+    output_folder = create_output_folder(base_path, model)
     
-    # Save speedup values (only speedups, no runtime at end)
-    output_path = f"{base_path}_speedup.csv"
-    with open(output_path, 'w') as f:
+    if verbose:
+        print(f"\nOutput folder: {output_folder}")
+    
+    # Save speedup values
+    speedup_path = os.path.join(output_folder, "speedup.csv")
+    with open(speedup_path, 'w') as f:
         for s in full_speedups:
             f.write(f"{s:.4f}\n")
     
     if verbose:
-        print(f"Speedup values saved to: {output_path}")
+        print(f"Speedup values saved to: {speedup_path}")
     
-    # Save 1-core runtime in separate file (query size estimate)
-    runtime_path = f"{base_path}_runtime.txt"
+    # Save ALL sampled runtimes (cores and avg_time for each sampled point)
+    runtime_path = os.path.join(output_folder, "runtime.txt")
     with open(runtime_path, 'w') as f:
-        f.write(f"{avg_times[0]:.4f}\n")
+        f.write("# cores avg_runtime_seconds\n")
+        for tc, avg_time in zip(thread_counts, avg_times):
+            f.write(f"{tc} {avg_time:.4f}\n")
     
     if verbose:
-        print(f"1-core runtime saved to: {runtime_path}")
+        print(f"All sampled runtimes saved to: {runtime_path}")
     
-    # Save fitting metadata
-    meta_path = f"{base_path}_speedup_meta.txt"
+    # Save comprehensive metadata
+    meta_path = os.path.join(output_folder, "metadata.txt")
     with open(meta_path, 'w') as f:
+        f.write(f"# Sparse Speedup Profiler Run Metadata\n")
+        f.write(f"# Generated: {datetime.now().isoformat()}\n\n")
+        
+        f.write(f"[configuration]\n")
+        f.write(f"query_file: {query_file}\n")
+        f.write(f"host: {host}\n")
+        f.write(f"port: {port}\n")
+        f.write(f"repeat: {repeat}\n")
+        f.write(f"warmup: {warmup}\n")
+        f.write(f"plateau_threshold: {plateau_threshold}\n\n")
+        
+        f.write(f"[sampling]\n")
+        f.write(f"sample_points: {thread_counts}\n")
+        f.write(f"max_threads: {max_threads}\n")
+        f.write(f"sampled_speedups: {[round(s, 4) for s in speedups_sampled]}\n")
+        f.write(f"sampled_runtimes: {[round(t, 4) for t in avg_times]}\n\n")
+        
+        f.write(f"[model]\n")
         f.write(f"model: {metadata['model']}\n")
         for key, value in metadata['params'].items():
             f.write(f"{key}: {value:.6f}\n")
+        f.write(f"\n")
+        
+        f.write(f"[plateau]\n")
         f.write(f"has_plateau: {metadata['has_plateau']}\n")
         f.write(f"plateau_thread: {metadata['plateau_thread']}\n")
         f.write(f"plateau_speedup: {metadata['plateau_speedup']:.4f}\n")
-        f.write(f"sample_points: {thread_counts}\n")
-        f.write(f"sampled_speedups: {speedups_sampled}\n")
     
     if verbose:
-        print(f"Fitting metadata saved to: {meta_path}")
+        print(f"Metadata saved to: {meta_path}")
     
     return full_speedups
 
@@ -351,15 +394,15 @@ def main():
                         default="1,2,4,8,12,16,24,32,48,64",
                         help="Comma-separated thread counts to sample (default: 1,2,4,8,12,16,24,32,48,64)")
     parser.add_argument("--repeat", "-r", type=int, default=8,
-                        help="Number of repetitions per sample point (default: 5)")
+                        help="Number of repetitions per sample point (default: 8)")
     parser.add_argument("--warmup", "-w", type=int, default=1,
-                        help="Number of warmup runs before measurement (default: 5)")
+                        help="Number of warmup runs before measurement (default: 1)")
     
     # Fitting parameters
     parser.add_argument("--plateau-threshold", "-p", type=float, default=0.001,
                         help="Relative speedup improvement threshold for plateau detection (default: 0.001)")
     parser.add_argument("--model", "-m", choices=['amdahl', 'usl'], default='usl',
-                        help="Scalability model to fit: amdahl (default) or usl")
+                        help="Scalability model to fit: amdahl or usl (default: usl)")
     
     # ClickHouse connection
     parser.add_argument("--host", default="localhost", help="ClickHouse host (default: localhost)")

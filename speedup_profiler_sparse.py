@@ -16,13 +16,13 @@ Supported models:
 
 Usage:
     # Test a single query file
-    python speedup_profiler_sparse.py --query queries/p_greedy_108.sql --max-threads 64 --repeat 5
+    python speedup_profiler_sparse.py --query queries/p_greedy_108.sql --sample-points 1,2,4,8 --repeat 5
     
     # Test all .sql files in a directory
-    python speedup_profiler_sparse.py --dir queries/ --max-threads 64 --repeat 5
+    python speedup_profiler_sparse.py --dir queries/ --sample-points 1,2,4,8 --repeat 5
     
     # Test with inline query string (no output file saved)
-    python speedup_profiler_sparse.py --query-string "SELECT count(*) FROM lineitem" --max-threads 64
+    python speedup_profiler_sparse.py --query-string "SELECT count(*) FROM lineitem" --sample-points 1,2,4,8
     
     # Custom sample points
     python speedup_profiler_sparse.py --query q.sql --sample-points 1,2,4,8,16,32,64
@@ -198,20 +198,6 @@ def process_query_file(
             print(f"Fitted sigma (contention): {params['sigma']:.6f}")
             print(f"Fitted kappa (coherency): {params['kappa']:.6f}")
     
-    # Print fitted results
-    if verbose:
-        print("-" * 60)
-        print("FITTED SPEEDUP CURVE (1 to {})".format(max_threads))
-        print("-" * 60)
-        # Print a subset for readability
-        display_points = [1, 2, 4, 8, 16, 32, 64]
-        display_points = [p for p in display_points if p <= max_threads]
-        print(f"{'Threads':<10} {'Fitted Speedup':<15}")
-        print("-" * 25)
-        for p in display_points:
-            print(f"{p:<10} {full_speedups[p-1]:<15.2f}")
-        print()
-    
     # Output speedup list
     speedup_str = ", ".join(f"{s:.2f}" for s in full_speedups)
     print(f"Speedup list: [{speedup_str}]")
@@ -329,19 +315,6 @@ def process_query_string(
         elif model == 'usl':
             print(f"Fitted sigma (contention): {params['sigma']:.6f}")
             print(f"Fitted kappa (coherency): {params['kappa']:.6f}")
-    
-    # Print fitted results
-    if verbose:
-        print("-" * 60)
-        print("FITTED SPEEDUP CURVE (1 to {})".format(max_threads))
-        print("-" * 60)
-        display_points = [1, 2, 4, 8, 16, 32, 64]
-        display_points = [p for p in display_points if p <= max_threads]
-        print(f"{'Threads':<10} {'Fitted Speedup':<15}")
-        print("-" * 25)
-        for p in display_points:
-            print(f"{p:<10} {full_speedups[p-1]:<15.2f}")
-        print()
     
     # Output speedup list
     speedup_str = ", ".join(f"{s:.2f}" for s in full_speedups)

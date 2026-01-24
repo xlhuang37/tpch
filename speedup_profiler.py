@@ -30,6 +30,8 @@ from typing import List, Tuple
 import urllib.request
 import urllib.parse
 
+# Import curve fitting functionality
+from speedup_fitcurve import fit_speedup_curve
 
 def read_query_file(filepath: str) -> str:
     """Read SQL query from file."""

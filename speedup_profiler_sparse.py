@@ -49,7 +49,7 @@ from speedup_fitcurve import fit_speedup_curve
 
 
 # Default sample points for sparse profiling
-DEFAULT_SAMPLE_POINTS = [1, 2, 4, 6, 8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64]
+DEFAULT_SAMPLE_POINTS = [1, 2, 4, 6, 8, 12, 16, 20, 24, 28, 32, 40, 45, 50, 60]
 
 
 def read_query_file(filepath: str) -> str:

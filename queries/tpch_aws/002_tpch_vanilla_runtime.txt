@@ -1,0 +1,5 @@
+# cores avg_runtime_seconds
+1 15.9451
+2 7.3016
+3 5.4005
+4 3.9902

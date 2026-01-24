@@ -372,7 +372,7 @@ def main():
                         help="Comma-separated thread counts to sample (default: 1,2,4,8,12,16,24,32,48,64)")
     parser.add_argument("--repeat", "-r", type=int, default=8,
                         help="Number of repetitions per sample point (default: 8)")
-    parser.add_argument("--warmup", "-w", type=int, default=1,
+    parser.add_argument("--warmup", "-w", type=int, default=2,
                         help="Number of warmup runs before measurement (default: 1)")
     
     # Fitting parameters

@@ -242,7 +242,7 @@ def main():
                        help="Maximum number of threads to test (default: 8)")
     parser.add_argument("--repeat", "-r", type=int, default=5,
                        help="Number of repetitions per thread count (default: 5)")
-    parser.add_argument("--warmup", "-w", type=int, default=5,
+    parser.add_argument("--warmup", "-w", type=int, default=3,
                        help="Number of warmup runs before measurement (default: 5)")
     
     # ClickHouse connection

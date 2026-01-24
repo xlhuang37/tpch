@@ -144,23 +144,9 @@ def process_query_file(query_file: str, host: str, port: int,
         print("-" * 60)
         print(f"{'Threads':<10} {'Avg Time (s)':<15} {'Speedup':<10}")
         print("-" * 35)
-        for i, (t, s) in enumerate(zip(avg_times, speedups), 1):
+        for i, (t, s) in enumerate(zip(avg_times, full_speedups), 1):
             print(f"{i:<10} {t:<15.4f} {s:<10.2f}")
         print()
-
-    # Print fitted results
-    if verbose:
-        print("-" * 60)
-        print("FITTED SPEEDUP CURVE (1 to {})".format(max_threads))
-        print("-" * 60)
-        display_points = [1, 2, 4, 8, 16, 32, 64]
-        display_points = [p for p in display_points if p <= max_threads]
-        print(f"{'Threads':<10} {'Fitted Speedup':<15}")
-        print("-" * 25)
-        for p in display_points:
-            print(f"{p:<10} {full_speedups[p-1]:<15.2f}")
-        print()
-    
     # Output speedup list
     speedup_str = ", ".join(f"{s:.2f}" for s in speedups)
     print(f"Speedup list: [{speedup_str}]")
@@ -229,21 +215,8 @@ def process_query_string(query: str, host: str, port: int,
         print("-" * 60)
         print(f"{'Threads':<10} {'Avg Time (s)':<15} {'Speedup':<10}")
         print("-" * 35)
-        for i, (t, s) in enumerate(zip(avg_times, speedups), 1):
+        for i, (t, s) in enumerate(zip(avg_times, full_speedups), 1):
             print(f"{i:<10} {t:<15.4f} {s:<10.2f}")
-        print()
-
-    # Print fitted results
-    if verbose:
-        print("-" * 60)
-        print("FITTED SPEEDUP CURVE (1 to {})".format(max_threads))
-        print("-" * 60)
-        display_points = [1, 2, 4, 8, 16, 32, 64]
-        display_points = [p for p in display_points if p <= max_threads]
-        print(f"{'Threads':<10} {'Fitted Speedup':<15}")
-        print("-" * 25)
-        for p in display_points:
-            print(f"{p:<10} {full_speedups[p-1]:<15.2f}")
         print()
 
     # Output speedup list

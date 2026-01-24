@@ -1,8 +1,0 @@
-model: usl
-sigma: 0.002312
-kappa: 0.000000
-has_plateau: False
-plateau_thread: 16
-plateau_speedup: 15.4636
-sample_points: [1, 2, 4, 8, 12, 16]
-sampled_speedups: [1.0, 2.003705119774861, 4.011663560238669, 7.972710613775281, 11.715161257571488, 15.463631905711841]

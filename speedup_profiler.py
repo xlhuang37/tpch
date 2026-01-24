@@ -134,7 +134,7 @@ def process_query_file(query_file: str, host: str, port: int,
     # Use speedup_fitcurve to fit and generate full curve
     full_speedups, metadata = fit_speedup_curve(
         list(range(1, max_threads + 1)), speedups,
-        max_threads, 0.001, 'usl'
+        max_threads, 'usl'
     )
 
     # Print results
@@ -219,7 +219,7 @@ def process_query_string(query: str, host: str, port: int,
     # Use speedup_fitcurve to fit and generate full curve
     full_speedups, metadata = fit_speedup_curve(
         list(range(1, max_threads + 1)), speedups,
-        max_threads, 0.001, 'usl',
+        max_threads, 'usl',
     )
     
     # Print results

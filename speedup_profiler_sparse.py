@@ -29,9 +29,6 @@ Usage:
     
     # Use USL model instead of Amdahl
     python speedup_profiler_sparse.py --query q.sql --model usl
-    
-    # Adjust plateau threshold (default 0.001 = 0.1% improvement threshold)
-    python speedup_profiler_sparse.py --query q.sql --plateau-threshold 0.1
 """
 
 import argparse
@@ -149,7 +146,6 @@ def process_query_file(
     sample_points: List[int],
     repeat: int, 
     warmup: int,
-    plateau_threshold: float,
     model: str,
     verbose: bool
 ) -> List[float]:
@@ -167,7 +163,6 @@ def process_query_file(
         print(f"Sample points: {valid_samples}")
         print(f"Repetitions per sample: {repeat}")
         print(f"Warmup iterations: {warmup}")
-        print(f"Plateau threshold: {plateau_threshold:.1%}")
         print(f"Model: {model}")
         print("-" * 60)
     
@@ -189,15 +184,10 @@ def process_query_file(
     # Use speedup_fitcurve to fit and generate full curve
     full_speedups, metadata = fit_speedup_curve(
         thread_counts, speedups_sampled,
-        max_threads, plateau_threshold, model
+        max_threads, model
     )
     
     if verbose:
-        if metadata['has_plateau']:
-            print(f"Plateau detected at {metadata['plateau_thread']} threads (speedup: {metadata['plateau_speedup']:.2f})")
-        else:
-            print("No plateau detected")
-        
         # Print model-specific parameters
         params = metadata['params']
         if model == 'amdahl':
@@ -264,7 +254,6 @@ def process_query_file(
         f.write(f"port: {port}\n")
         f.write(f"repeat: {repeat}\n")
         f.write(f"warmup: {warmup}\n")
-        f.write(f"plateau_threshold: {plateau_threshold}\n\n")
         
         f.write(f"[sampling]\n")
         f.write(f"sample_points: {thread_counts}\n")
@@ -277,11 +266,6 @@ def process_query_file(
         for key, value in metadata['params'].items():
             f.write(f"{key}: {value:.6f}\n")
         f.write(f"\n")
-        
-        f.write(f"[plateau]\n")
-        f.write(f"has_plateau: {metadata['has_plateau']}\n")
-        f.write(f"plateau_thread: {metadata['plateau_thread']}\n")
-        f.write(f"plateau_speedup: {metadata['plateau_speedup']:.4f}\n")
     
     if verbose:
         print(f"Metadata saved to: {meta_path}")
@@ -296,7 +280,6 @@ def process_query_string(
     sample_points: List[int],
     repeat: int, 
     warmup: int,
-    plateau_threshold: float,
     model: str,
     verbose: bool
 ) -> List[float]:
@@ -312,7 +295,6 @@ def process_query_string(
         print(f"Sample points: {valid_samples}")
         print(f"Repetitions per sample: {repeat}")
         print(f"Warmup iterations: {warmup}")
-        print(f"Plateau threshold: {plateau_threshold:.1%}")
         print(f"Model: {model}")
         print("-" * 60)
     
@@ -334,15 +316,10 @@ def process_query_string(
     # Use speedup_fitcurve to fit and generate full curve
     full_speedups, metadata = fit_speedup_curve(
         thread_counts, speedups_sampled,
-        max_threads, plateau_threshold, model
+        max_threads, model
     )
     
     if verbose:
-        if metadata['has_plateau']:
-            print(f"Plateau detected at {metadata['plateau_thread']} threads (speedup: {metadata['plateau_speedup']:.2f})")
-        else:
-            print("No plateau detected")
-        
         # Print model-specific parameters
         params = metadata['params']
         if model == 'amdahl':
@@ -399,8 +376,6 @@ def main():
                         help="Number of warmup runs before measurement (default: 1)")
     
     # Fitting parameters
-    parser.add_argument("--plateau-threshold", "-p", type=float, default=0.001,
-                        help="Relative speedup improvement threshold for plateau detection (default: 0.001)")
     parser.add_argument("--model", "-m", choices=['amdahl', 'usl'], default='usl',
                         help="Scalability model to fit: amdahl or usl (default: usl)")
     
@@ -438,7 +413,7 @@ def main():
             process_query_file(
                 query_file, args.host, args.port, 
                 sample_points, args.repeat, args.warmup,
-                args.plateau_threshold, args.model, verbose
+                args.model, verbose
             )
             if verbose and len(query_files) > 1:
                 print()
@@ -447,7 +422,7 @@ def main():
         process_query_string(
             args.query_string, args.host, args.port,
             sample_points, args.repeat, args.warmup,
-            args.plateau_threshold, args.model, verbose
+            args.model, verbose
         )
 
 

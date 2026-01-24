@@ -14,10 +14,6 @@ Supported models:
 
 Input format (stdin or file): Each line contains "speedup cores" (space or comma separated)
 Output format: One speedup value per line (64 lines by default)
-
-If the speedup increment becomes too low (plateau detected), the fitted curve
-is flattened to that plateau value.
-
 Usage:
     # From stdin (default: Amdahl's law)
     echo "1.0 1
@@ -30,9 +26,6 @@ Usage:
     
     # Custom max threads
     python speedup_fitcurve.py --input samples.txt --max-threads 32
-    
-    # Adjust plateau threshold
-    python speedup_fitcurve.py --input samples.txt --plateau-threshold 0.1
 """
 
 import argparse
@@ -179,41 +172,6 @@ def fit_usl(thread_counts: List[int], speedups: List[float]) -> Tuple[Tuple[floa
             sigma = 0.1
         return (sigma, 0.0), {'sigma': sigma, 'kappa': 0.0}
 
-
-# =============================================================================
-# Plateau Detection
-# =============================================================================
-
-def detect_plateau(thread_counts: List[int], speedups: List[float], 
-                   threshold: float = 0.05) -> Tuple[bool, int, float]:
-    """
-    Detect if speedup has plateaued (incremental gain below threshold).
-    
-    Args:
-        thread_counts: List of thread counts
-        speedups: Corresponding speedups
-        threshold: Relative improvement threshold (e.g., 0.05 = 5%)
-    
-    Returns:
-        (has_plateau, plateau_thread_count, plateau_speedup)
-    """
-    if len(speedups) < 2:
-        return False, thread_counts[-1], speedups[-1]
-    
-    for i in range(1, len(speedups)):
-        prev_speedup = speedups[i - 1]
-        curr_speedup = speedups[i]
-        
-        if prev_speedup > 0:
-            relative_gain = (curr_speedup - prev_speedup) / prev_speedup
-            
-            # If gain is below threshold (or negative), we've hit plateau
-            if relative_gain < threshold:
-                return True, thread_counts[i - 1], prev_speedup
-    
-    return False, thread_counts[-1], speedups[-1]
-
-
 # =============================================================================
 # Curve Generation
 # =============================================================================
@@ -222,39 +180,22 @@ def generate_full_speedup_curve(
     max_threads: int,
     model: str,
     params: dict,
-    plateau_thread: int,
-    plateau_speedup: float,
-    has_plateau: bool
 ) -> List[float]:
     """
     Generate full speedup curve from 1 to max_threads using fitted model.
-    
-    If plateau is detected, the curve flattens at the plateau point.
     """
     speedups = []
     
     for n in range(1, max_threads + 1):
-        if has_plateau and n >= plateau_thread:
-            # Flatten at plateau value
-            speedup = plateau_speedup
+        # Use fitted model
+        if model == 'amdahl':
+            s = params['s']
+            speedup = amdahl_law_scalar(n, s)
+        elif model == 'usl':
+            sigma, kappa = params['sigma'], params['kappa']
+            speedup = usl_law_scalar(n, sigma, kappa)
         else:
-            # Use fitted model
-            if model == 'amdahl':
-                s = params['s']
-                if HAS_SCIPY:
-                    speedup = float(amdahl_law(np.array([n]), s)[0])
-                else:
-                    speedup = amdahl_law_scalar(n, s)
-            elif model == 'usl':
-                sigma, kappa = params['sigma'], params['kappa']
-                if HAS_SCIPY:
-                    speedup = float(usl_law(np.array([n]), sigma, kappa)[0])
-                else:
-                    speedup = usl_law_scalar(n, sigma, kappa)
-            else:
-                raise ValueError(f"Unknown model: {model}")
-        
-        speedups.append(speedup)
+            raise ValueError(f"Unknown model: {model}")
     
     return speedups
 
@@ -283,8 +224,8 @@ def parse_input(lines: List[str]) -> Tuple[List[int], List[float]]:
         # Split by space or comma
         parts = line.replace(',', ' ').split()
         if len(parts) >= 2:
-            speedup = float(parts[0])
-            cores = int(parts[1])
+            speedup = float(parts[1])
+            cores = int(parts[0])
             speedups.append(speedup)
             thread_counts.append(cores)
     
@@ -304,7 +245,6 @@ def fit_and_generate(
     thread_counts: List[int],
     speedups: List[float],
     max_threads: int,
-    plateau_threshold: float,
     model: str,
     verbose: bool
 ) -> Tuple[List[float], dict]:
@@ -314,17 +254,7 @@ def fit_and_generate(
     Returns:
         (full_speedups, metadata_dict)
     """
-    # Detect plateau
-    has_plateau, plateau_thread, plateau_speedup = detect_plateau(
-        thread_counts, speedups, plateau_threshold
-    )
-    
-    if verbose:
-        if has_plateau:
-            print(f"Plateau detected at {plateau_thread} threads (speedup: {plateau_speedup:.2f})", file=sys.stderr)
-        else:
-            print("No plateau detected", file=sys.stderr)
-    
+
     # Fit model
     if model == 'amdahl':
         serial_fraction, params = fit_amdahl(thread_counts, speedups)
@@ -352,16 +282,12 @@ def fit_and_generate(
     
     # Generate full speedup curve
     full_speedups = generate_full_speedup_curve(
-        max_threads, model, params,
-        plateau_thread, plateau_speedup, has_plateau
+        max_threads, model, params
     )
     
     metadata = {
         'model': model,
         'params': params,
-        'has_plateau': has_plateau,
-        'plateau_thread': plateau_thread,
-        'plateau_speedup': plateau_speedup,
         'sample_points': thread_counts,
         'sampled_speedups': speedups,
     }
@@ -390,9 +316,6 @@ def main():
     # Fitting parameters
     parser.add_argument("--max-threads", "-t", type=int, default=64,
                         help="Maximum number of threads for output curve (default: 64)")
-    parser.add_argument("--plateau-threshold", "-p", type=float, default=0.001,
-                        help="Relative speedup improvement threshold for plateau detection (default: 0.001)")
-    
     # Output options
     parser.add_argument("--verbose", "-v", action="store_true", 
                         help="Print fitting info to stderr")
@@ -424,7 +347,7 @@ def main():
     # Fit and generate
     full_speedups, metadata = fit_and_generate(
         thread_counts, speedups,
-        args.max_threads, args.plateau_threshold, args.model, args.verbose
+        args.max_threads,  args.model, args.verbose
     )
     
     # Write output
@@ -442,9 +365,6 @@ def main():
             f.write(f"model: {metadata['model']}\n")
             for key, value in metadata['params'].items():
                 f.write(f"{key}: {value:.6f}\n")
-            f.write(f"has_plateau: {metadata['has_plateau']}\n")
-            f.write(f"plateau_thread: {metadata['plateau_thread']}\n")
-            f.write(f"plateau_speedup: {metadata['plateau_speedup']:.4f}\n")
             f.write(f"sample_points: {metadata['sample_points']}\n")
             f.write(f"sampled_speedups: {metadata['sampled_speedups']}\n")
 
@@ -457,7 +377,6 @@ def fit_speedup_curve(
     thread_counts: List[int],
     speedups: List[float],
     max_threads: int = 32,
-    plateau_threshold: float = 0.001,
     model: str = 'usl'
 ) -> Tuple[List[float], dict]:
     """
@@ -467,7 +386,6 @@ def fit_speedup_curve(
         thread_counts: List of thread counts sampled
         speedups: Corresponding observed speedups
         max_threads: Maximum threads for output curve
-        plateau_threshold: Threshold for plateau detection
         model: 'amdahl' or 'usl'
     
     Returns:
@@ -475,7 +393,7 @@ def fit_speedup_curve(
     """
     return fit_and_generate(
         thread_counts, speedups,
-        max_threads, plateau_threshold, model, verbose=False
+        max_threads, model, verbose=False
     )
 
 

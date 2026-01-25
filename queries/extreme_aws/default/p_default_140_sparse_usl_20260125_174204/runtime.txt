@@ -1,0 +1,17 @@
+# cores avg_runtime_seconds
+1 inf
+2 inf
+4 inf
+8 inf
+12 inf
+16 inf
+20 inf
+24 inf
+28 inf
+32 inf
+40 inf
+44 inf
+46 inf
+50 inf
+55 inf
+60 inf

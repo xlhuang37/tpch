@@ -1,0 +1,20 @@
+# Sparse Speedup Profiler Run Metadata
+# Generated: 2026-01-25T17:38:22.967668
+
+[configuration]
+query_file: queries/extreme_aws/default/np_default_58.sql
+host: localhost
+port: 8123
+repeat: 10
+warmup: 2
+[sampling]
+sample_points: [1, 2, 3, 4, 5, 6, 7, 8]
+max_threads: 8
+sampled_speedups: [1.0, 1.7169, 1.709, 1.8066, 1.7655, 1.7581, 1.7122, 1.7112]
+sampled_runtimes: [6.0036, 3.4967, 3.5129, 3.3232, 3.4005, 3.4149, 3.5063, 3.5085]
+
+[model]
+model: usl
+sigma: 0.489753
+kappa: 0.000000
+

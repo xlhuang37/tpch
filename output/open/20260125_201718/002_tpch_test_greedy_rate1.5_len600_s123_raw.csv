@@ -1,0 +1,2 @@
+arrival_ms,start_ms,end_ms,latency_ms,wait_ms,qid
+36.0014,DROPPED,DROPPED,DROPPED,DROPPED,001_tpch_greedy

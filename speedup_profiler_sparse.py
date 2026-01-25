@@ -16,10 +16,10 @@ Supported models:
 
 Usage:
     # Test all .sql files in a directory
-    python speedup_profiler_sparse.py --dir queries/extreme_aws/default --sample-points 1,2,4,8 --repeat 3 --warmup 2
+    python speedup_profiler_sparse.py --dir queries/extreme_aws/default --sample-points 1,2,4,8,12,16,20,24,28,32,40,44,46,50,55,60 --repeat 3 --warmup 2
     
     # Test a single query file
-    python speedup_profiler_sparse.py --query queries/p_greedy_108.sql --sample-points 1,2,4,8 --repeat 5
+    python speedup_profiler_sparse.py --query queries/extreme_aws/default/p_default_140 --sample-points 1,2,4,8,12,16,20,24,28,32,40,44,46,50,55,60 --repeat 3 --warmup 2
     
     # Test with inline query string (no output file saved)
     python speedup_profiler_sparse.py --query-string "SELECT count(*) FROM lineitem" --sample-points 1,2,4,8

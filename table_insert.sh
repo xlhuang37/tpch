@@ -1,6 +1,3 @@
-echo "deleting existing tables"
-rm -rf ../runtime
-
 if [ "$1" == "-s" ]; then
     # 1. Check if $2 is empty
     if [ -z "$2" ]; then
@@ -30,6 +27,7 @@ git submodule update --init --recursive
 cd ./tpch-kit/dbgen
 make
 ./dbgen -s $2 -f
+cd ../..
 
 sleep 1
 

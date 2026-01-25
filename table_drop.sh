@@ -1,0 +1,2 @@
+../ClickHouse/build/programs/clickhouse-format -n --oneline < ./templates/table_drop.sql > ./templates/table_drop_processed.sql
+../ClickHouse/build/programs/clickhouse-client < ./templates/table_drop_processed.sql

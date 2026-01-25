@@ -1,3 +1,8 @@
+git submodule update --init --recursive
+
+../ClickHouse/build/programs/clickhouse-format -n --oneline < ./templates/table_create.sql > ./templates/table_create_processed.sql
+../ClickHouse/build/programs/clickhouse-client < ./templates/table_create_processed.sql
+
 ../ClickHouse/build/programs/clickhouse-client --format_csv_delimiter '|' --query "INSERT INTO nation FORMAT CSV" < ./tpch-kit/dbgen/nation.tbl
 ../ClickHouse/build/programs/clickhouse-client --format_csv_delimiter '|' --query "INSERT INTO region FORMAT CSV" < ./tpch-kit/dbgen/region.tbl
 ../ClickHouse/build/programs/clickhouse-client --format_csv_delimiter '|' --query "INSERT INTO part FORMAT CSV" < ./tpch-kit/dbgen/part.tbl

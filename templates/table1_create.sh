@@ -1,0 +1,2 @@
+../ClickHouse/build/programs/clickhouse-format -n --oneline < ./templates/table1_create.sql > ./templates/table1_create_processed.sql
+../ClickHouse/build/programs/clickhouse-client < ./templates/table1_create_processed.sql

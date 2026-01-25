@@ -29,7 +29,7 @@ git submodule update --init --recursive
 
 cd ./tpch-kit/dbgen
 make
-./dbgen -s 
+./dbgen -s $2
 
 ../ClickHouse/build/programs/clickhouse-client --format_csv_delimiter '|' --query "INSERT INTO nation FORMAT CSV" < ./tpch-kit/dbgen/nation.tbl
 ../ClickHouse/build/programs/clickhouse-client --format_csv_delimiter '|' --query "INSERT INTO region FORMAT CSV" < ./tpch-kit/dbgen/region.tbl

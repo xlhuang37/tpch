@@ -1,0 +1,67 @@
+Statistics for schedule: 002_tpch_test_greedy_rate8_len300_s123
+Total completed queries: 2357
+Total dropped queries: 0
+============================================================
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    2357
+  Average:  319.1820 ms
+  Min:      112.8701 ms
+  Max:      1970.7614 ms
+  P50:      230.0175 ms
+  P90:      613.8359 ms
+  P95:      874.8919 ms
+  P99:      1371.5125 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    2357
+  Average:  0.3011 ms
+  Min:      0.0477 ms
+  Max:      3.5828 ms
+  P50:      0.2111 ms
+  P90:      0.5055 ms
+  P95:      0.7503 ms
+  P99:      1.2572 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  001_tpch_greedy:
+    Completed: 1197
+    Latency:
+      Average:  351.9613 ms
+      Min:      112.8701 ms
+      Max:      1750.5478 ms
+      P50:      250.7954 ms
+      P90:      739.1195 ms
+      P95:      949.5015 ms
+      P99:      1234.3219 ms
+    Wait Time:
+      Average:  0.2885 ms
+      Min:      0.0480 ms
+      Max:      3.5828 ms
+      P50:      0.2067 ms
+      P90:      0.4835 ms
+      P95:      0.7371 ms
+      P99:      0.9990 ms
+
+  021_tpch_greedy:
+    Completed: 1160
+    Latency:
+      Average:  285.3572 ms
+      Min:      116.9747 ms
+      Max:      1970.7614 ms
+      P50:      215.9068 ms
+      P90:      477.4704 ms
+      P95:      690.9315 ms
+      P99:      1403.5063 ms
+    Wait Time:
+      Average:  0.3141 ms
+      Min:      0.0477 ms
+      Max:      2.5473 ms
+      P50:      0.2165 ms
+      P90:      0.5444 ms
+      P95:      0.7595 ms
+      P99:      1.7854 ms

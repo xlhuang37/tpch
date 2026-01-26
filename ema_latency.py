@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Read the CSV file
-df = pd.read_csv('/Users/xiaolonghuang/Desktop/ClickHouse/tpch/output/20260119_081505/001_np_greedy_58_p_greedy_140_lam0.141414_0.141414_len3600_s123_round_raw.csv')
+df = pd.read_csv('H:/ClickHouse/tpch/output/open/20260125_213829/001_tpch_test_default_rate8_len600_s123_raw.csv')
 
 # Filter out DROPPED rows (convert to numeric, coercing errors to NaN, then drop NaN)
 df['latency_ms'] = pd.to_numeric(df['latency_ms'], errors='coerce')

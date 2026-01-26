@@ -34,7 +34,6 @@ class ScheduleConfig:
 
 # Define all schedules to generate in batch mode
 SCHEDULES: List[ScheduleConfig] = [
-    ScheduleConfig(arrival_rate=10, length=300, query_dir="queries/tpch_test_all"),
     ScheduleConfig(arrival_rate=10, length=300, query_dir="queries/tpch_test_greedy"),
     # Add more schedules as needed:
     # ScheduleConfig(arrival_rate=0.2, length=3600, query_dir="./queries"),

@@ -1,0 +1,19 @@
+# Sparse Speedup Profiler Run Metadata
+# Generated: 2026-01-26T16:08:51.933020
+
+[configuration]
+query_file: queries/tpch_test_default/021_tpch_default.sql
+host: localhost
+port: 8123
+repeat: 3
+warmup: 2
+[sampling]
+sample_points: [1, 2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 44, 46, 50, 55, 60]
+max_threads: 60
+sampled_speedups: [1.0, 1.6392, 3.0061, 5.3268, 6.6771, 8.2023, 9.0584, 10.1136, 11.0204, 11.3099, 11.2272, 11.2216, 11.0427, 11.369, 11.3202, 11.5506]
+sampled_runtimes: [1.1671, 0.712, 0.3882, 0.2191, 0.1748, 0.1423, 0.1288, 0.1154, 0.1059, 0.1032, 0.1039, 0.104, 0.1057, 0.1027, 0.1031, 0.101]
+
+[model]
+model: amdahl
+s: 0.086576
+

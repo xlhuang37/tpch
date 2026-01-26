@@ -1,0 +1,48 @@
+Statistics for schedule: 001_tpch_test_all_rate8_len300_s123
+Total completed queries: 1
+Total dropped queries: 0
+============================================================
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    1
+  Average:  7665.8560 ms
+  Min:      7665.8560 ms
+  Max:      7665.8560 ms
+  P50:      7665.8560 ms
+  P90:      7665.8560 ms
+  P95:      7665.8560 ms
+  P99:      7665.8560 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    1
+  Average:  0.5428 ms
+  Min:      0.5428 ms
+  Max:      0.5428 ms
+  P50:      0.5428 ms
+  P90:      0.5428 ms
+  P95:      0.5428 ms
+  P99:      0.5428 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_all_58:
+    Completed: 1
+    Latency:
+      Average:  7665.8560 ms
+      Min:      7665.8560 ms
+      Max:      7665.8560 ms
+      P50:      7665.8560 ms
+      P90:      7665.8560 ms
+      P95:      7665.8560 ms
+      P99:      7665.8560 ms
+    Wait Time:
+      Average:  0.5428 ms
+      Min:      0.5428 ms
+      Max:      0.5428 ms
+      P50:      0.5428 ms
+      P90:      0.5428 ms
+      P95:      0.5428 ms
+      P99:      0.5428 ms

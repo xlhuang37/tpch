@@ -102,6 +102,8 @@ class QueryResult:
     event: Optional[Event] = None  # For async execution
     latency_record: Optional[LatencyRecord] = None
     error_message: Optional[str] = None
+    profile_traces: Optional[List[QueryProfileTrace]] = None  # ProfileEvents traces during query execution
+    query_id: Optional[str] = None  # The query_id used for this execution
 
 
 def parse_proc_cpuinfo() -> Dict[str, Any]:
@@ -822,6 +824,57 @@ def query_profile_events(url: str, query_id: str) -> Dict[str, Any]:
     return {}
 
 
+def profile_events_tracer_thread(
+    url: str,
+    query_id: str,
+    period_ms: int,
+    traces: List[QueryProfileTrace],
+    traces_lock: threading.Lock,
+    query_start_ns: int,
+    stop_event: threading.Event,
+) -> None:
+    """
+    Background thread to periodically sample ProfileEvents from system.processes
+    for a specific query while it's running.
+    
+    Args:
+        url: ClickHouse HTTP endpoint
+        query_id: The query_id to trace
+        period_ms: Sampling period in milliseconds
+        traces: List to append traces to (shared with caller)
+        traces_lock: Lock for thread-safe access to traces list
+        query_start_ns: Start time of the query in nanoseconds (for relative timestamps)
+        stop_event: Event to signal when query has completed
+    """
+    period_seconds = period_ms / 1000.0
+    
+    while not stop_event.is_set():
+        # Sample ProfileEvents
+        profile_events = query_profile_events(url, query_id)
+        timestamp_ms = (time.perf_counter_ns() - query_start_ns) / 1e6
+        
+        if profile_events:
+            with traces_lock:
+                traces.append(QueryProfileTrace(
+                    timestamp_ms=timestamp_ms,
+                    profile_events=profile_events
+                ))
+        
+        # Wait for next sample period or until query completes
+        if stop_event.wait(timeout=period_seconds):
+            break  # Query completed, exit loop
+    
+    # One final sample after query completes to capture final state
+    profile_events = query_profile_events(url, query_id)
+    timestamp_ms = (time.perf_counter_ns() - query_start_ns) / 1e6
+    if profile_events:
+        with traces_lock:
+            traces.append(QueryProfileTrace(
+                timestamp_ms=timestamp_ms,
+                profile_events=profile_events
+            ))
+
+
 def save_query_profile_traces(per_query_dir: str, query_id: str, 
                                traces: List[QueryProfileTrace]) -> str:
     """
@@ -1088,10 +1141,15 @@ def execute_query_sync(
     entry: PriorityQueueEntry,
     url: str,
     t0_ns: int,
+    trace_processes: bool = False,
+    query_trace_period_ms: int = 100,
 ) -> QueryResult:
     """
     Execute a single query synchronously using requests.
     Returns QueryResult with success/failure status and timing data.
+    
+    If trace_processes is True, spawns a background thread to sample
+    ProfileEvents from system.processes during query execution.
     """
     event = entry.event
     arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
@@ -1104,9 +1162,25 @@ def execute_query_sync(
     if entry.workload:
         query_url += f"&workload={entry.workload}"
     
+    # Set up profile tracing if enabled
+    profile_traces: List[QueryProfileTrace] = []
+    traces_lock = threading.Lock()
+    tracer_stop_event = threading.Event()
+    tracer_thread = None
+    
     try:
         req_start_ns = time.perf_counter_ns()
         start_ms = (req_start_ns - t0_ns) / 1e6
+        
+        # Start profile tracer thread if enabled
+        if trace_processes:
+            tracer_thread = threading.Thread(
+                target=profile_events_tracer_thread,
+                args=(url, query_id, query_trace_period_ms, profile_traces, 
+                      traces_lock, req_start_ns, tracer_stop_event),
+                daemon=True,
+            )
+            tracer_thread.start()
         
         response = session.post(query_url, data=entry.sql_bytes, timeout=None)
         
@@ -1115,6 +1189,17 @@ def execute_query_sync(
         wait_ms = start_ms - arrival_ms
         latency_ms = end_ms - arrival_ms
         exec_ms = end_ms - start_ms
+        
+        # Stop tracer thread and wait for it to finish
+        if tracer_thread:
+            tracer_stop_event.set()
+            tracer_thread.join(timeout=2.0)  # Wait up to 2 seconds
+        
+        # Get final traces (thread-safe copy)
+        final_traces = None
+        if trace_processes:
+            with traces_lock:
+                final_traces = list(profile_traces) if profile_traces else None
         
         if response.status_code == 200:
             # Success
@@ -1126,14 +1211,17 @@ def execute_query_sync(
                 wait_ms=wait_ms,
                 qid=event.qid
             )
+            trace_info = f" traces={len(final_traces)}" if final_traces else ""
             print(f"[{event.at_ms:>6} ms] {event.qid} ({query_id}): OK "
-                  f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms")
+                  f"lat={latency_ms:.2f}ms wait={wait_ms:.2f}ms exec={exec_ms:.2f}ms{trace_info}")
             return QueryResult(
                 success=True,
                 should_terminate=False,
                 entry=entry,
                 event=event,
                 latency_record=latency_record,
+                profile_traces=final_traces,
+                query_id=query_id,
             )
         else:
             # Server rejected the query
@@ -1146,9 +1234,15 @@ def execute_query_sync(
                 entry=entry,
                 event=event,
                 error_message=f"HTTP {response.status_code}: {snippet}",
+                profile_traces=None,  # No traces on failure
+                query_id=query_id,
             )
             
     except requests.exceptions.ConnectionError as e:
+        # Stop tracer thread on exception
+        if tracer_thread:
+            tracer_stop_event.set()
+            tracer_thread.join(timeout=1.0)
         print(f"[{event.at_ms:>6} ms] {event.qid}: CONNECTION ERROR - {e}")
         return QueryResult(
             success=False,
@@ -1156,8 +1250,13 @@ def execute_query_sync(
             entry=entry,
             event=event,
             error_message=str(e),
+            profile_traces=None,
+            query_id=query_id,
         )
     except requests.exceptions.RequestException as e:
+        if tracer_thread:
+            tracer_stop_event.set()
+            tracer_thread.join(timeout=1.0)
         print(f"[{event.at_ms:>6} ms] {event.qid}: REQUEST ERROR - {e}")
         return QueryResult(
             success=False,
@@ -1165,8 +1264,13 @@ def execute_query_sync(
             entry=entry,
             event=event,
             error_message=str(e),
+            profile_traces=None,
+            query_id=query_id,
         )
     except Exception as e:
+        if tracer_thread:
+            tracer_stop_event.set()
+            tracer_thread.join(timeout=1.0)
         print(f"[{event.at_ms:>6} ms] {event.qid}: UNEXPECTED ERROR - {e}")
         return QueryResult(
             success=False,
@@ -1174,6 +1278,8 @@ def execute_query_sync(
             entry=entry,
             event=event,
             error_message=str(e),
+            profile_traces=None,
+            query_id=query_id,
         )
 
 
@@ -1189,6 +1295,9 @@ def consumer_thread(
     stop_event: threading.Event,
     producer_done_event: threading.Event,
     termination_event: threading.Event,
+    trace_processes: bool = False,
+    query_trace_period_ms: int = 100,
+    query_profile_traces: Optional[Dict[str, List[QueryProfileTrace]]] = None,
 ) -> None:
     """
     Consumer thread: dispatches queries and handles failures.
@@ -1197,6 +1306,9 @@ def consumer_thread(
     and handles failures by pausing and reinserting failed queries.
     When queue is exhausted and producer is done, waits for in-flight queries
     then signals termination to the producer.
+    
+    If trace_processes is True, profile events are collected for each query
+    and stored in query_profile_traces dict (keyed by query_id).
     """
     # Use a thread pool for concurrent query execution
     pool_size = max_concurrency if max_concurrency > 0 else 100
@@ -1253,6 +1365,10 @@ def consumer_thread(
             for result in results:
                 if result.success and result.latency_record:
                     latency_records.append(result.latency_record)
+                    # Collect profile traces if available
+                    if trace_processes and query_profile_traces is not None:
+                        if result.query_id and result.profile_traces:
+                            query_profile_traces[result.query_id] = result.profile_traces
                 elif result.entry:
                     failed_entries.append(result.entry)
         
@@ -1361,6 +1477,8 @@ def consumer_thread(
                 entry,
                 url,
                 t0_ns,
+                trace_processes,
+                query_trace_period_ms,
             )
             in_flight[entry.entry_id] = InFlightQuery(entry=entry, future=future)
 
@@ -1446,9 +1564,12 @@ async def run_schedule(
     pre_run_path = save_pre_run_state(output_dir, schedule_name)
     print(f"  Pre-run state saved to: {pre_run_path}\n")
     
-    # Note: trace_processes is not supported in the new thread-based architecture
+    # Create output folder for query profile traces if enabled
+    query_traces_dir = None
     if trace_processes:
-        print("WARNING: --trace-processes is not supported with the new thread-based architecture")
+        query_traces_dir = os.path.join(output_dir, f"{schedule_name}_query_traces")
+        os.makedirs(query_traces_dir, exist_ok=True)
+        print(f"Query profile traces will be saved to: {query_traces_dir}")
     
     # Collect system.events at start
     print("Collecting system.events (start)...")
@@ -1467,6 +1588,7 @@ async def run_schedule(
     # Thread-safe data structures
     latency_records: List[LatencyRecord] = []
     dropped_records: List[DroppedRecord] = []
+    query_profile_traces: Dict[str, List[QueryProfileTrace]] = {}  # query_id -> traces
     records_lock = threading.Lock()
     
     # Priority queue for producer/consumer communication
@@ -1527,7 +1649,8 @@ async def run_schedule(
         target=consumer_thread,
         args=(priority_queue, url, t0_ns, latency_records, dropped_records, 
               records_lock, pause_seconds, max_concurrency, stop_event,
-              producer_done_event, termination_event),
+              producer_done_event, termination_event, trace_processes, 
+              query_trace_period_ms, query_profile_traces),
         name="consumer"
     )
     
@@ -1572,6 +1695,14 @@ async def run_schedule(
     if trace_metrics:
         periodic_metrics_path = save_schedule_metrics_traces(output_dir, schedule_name, schedule_metrics_traces)
     
+    # Save query profile traces (conditional)
+    saved_query_traces_count = 0
+    if trace_processes and query_traces_dir and query_profile_traces:
+        for query_id, traces in query_profile_traces.items():
+            if traces:
+                save_query_profile_traces(query_traces_dir, query_id, traces)
+                saved_query_traces_count += 1
+    
     print(f"\nSchedule '{schedule_name}' completed.")
     print(f"  Raw data saved to: {raw_path}")
     print(f"  Statistics saved to: {stats_path}")
@@ -1582,6 +1713,8 @@ async def run_schedule(
         print(f"  Periodic events ({len(schedule_events_traces)} traces) saved to: {periodic_events_path}")
     if periodic_metrics_path:
         print(f"  Periodic metrics ({len(schedule_metrics_traces)} traces) saved to: {periodic_metrics_path}")
+    if trace_processes and query_traces_dir:
+        print(f"  Query profile traces ({saved_query_traces_count} queries) saved to: {query_traces_dir}")
     
     # Print summary to console
     if latency_records:

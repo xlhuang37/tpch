@@ -1,2 +1,0 @@
-arrival_ms,start_ms,end_ms,latency_ms,wait_ms,qid
-7.0020,7.1628,85.0615,78.0596,0.1609,001_tpch_all

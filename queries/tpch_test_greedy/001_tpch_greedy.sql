@@ -1,23 +1,11 @@
 SELECT
-    l_returnflag,
-    l_linestatus,
-    sum(l_quantity) AS sum_qty,
-    sum(l_extendedprice) AS sum_base_price,
-    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
-    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
-    avg(l_quantity) AS avg_qty,
-    avg(l_extendedprice) AS avg_price,
-    avg(l_discount) AS avg_disc,
-    count(*) AS count_order
+    sum(l_extendedprice * l_discount) AS revenue
 FROM
     lineitem
 WHERE
-    l_shipdate <= DATE '1998-12-01' - INTERVAL '90' DAY
-GROUP BY
-    l_returnflag,
-    l_linestatus
-ORDER BY
-    l_returnflag,
-    l_linestatus
+    l_shipdate >= DATE '1994-01-01'
+    AND l_shipdate < DATE '1994-01-01' + INTERVAL '1' year
+    AND l_discount BETWEEN 0.05 AND 0.07
+    AND l_quantity < 24
 SETTINGS
     workload='SpeedUpOne';

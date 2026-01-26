@@ -1,0 +1,67 @@
+Statistics for schedule: 001_tpch_test_all_rate8_len300_s123
+Total completed queries: 5
+Total dropped queries: 0
+============================================================
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    5
+  Average:  6480.8905 ms
+  Min:      3808.5113 ms
+  Max:      10487.6161 ms
+  P50:      3861.6212 ms
+  P90:      10459.3121 ms
+  P95:      10473.4641 ms
+  P99:      10484.7857 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    5
+  Average:  0.3047 ms
+  Min:      0.1356 ms
+  Max:      0.4541 ms
+  P50:      0.3657 ms
+  P90:      0.4309 ms
+  P95:      0.4425 ms
+  P99:      0.4518 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_all_58:
+    Completed: 2
+    Latency:
+      Average:  10452.2360 ms
+      Min:      10416.8560 ms
+      Max:      10487.6161 ms
+      P50:      10452.2360 ms
+      P90:      10480.5401 ms
+      P95:      10484.0781 ms
+      P99:      10486.9085 ms
+    Wait Time:
+      Average:  0.4251 ms
+      Min:      0.3961 ms
+      Max:      0.4541 ms
+      P50:      0.4251 ms
+      P90:      0.4483 ms
+      P95:      0.4512 ms
+      P99:      0.4536 ms
+
+  p_greedy_140:
+    Completed: 3
+    Latency:
+      Average:  3833.3269 ms
+      Min:      3808.5113 ms
+      Max:      3861.6212 ms
+      P50:      3829.8481 ms
+      P90:      3855.2666 ms
+      P95:      3858.4439 ms
+      P99:      3860.9858 ms
+    Wait Time:
+      Average:  0.2243 ms
+      Min:      0.1356 ms
+      Max:      0.3657 ms
+      P50:      0.1717 ms
+      P90:      0.3269 ms
+      P95:      0.3463 ms
+      P99:      0.3618 ms

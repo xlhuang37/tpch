@@ -42,5 +42,5 @@ ORDER BY
     s_name,
     p_partkey
 SETTINGS
-    workload='all';
+    workload='SpeedUpOne';
 

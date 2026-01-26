@@ -20,4 +20,4 @@ ORDER BY
     l_returnflag,
     l_linestatus
 SETTINGS
-    workload='all';
+    workload='SpeedUpOne';

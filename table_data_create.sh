@@ -1,0 +1,31 @@
+if [ "$1" == "-s" ]; then
+    # 1. Check if $2 is empty
+    if [ -z "$2" ]; then
+        echo "Error: -s requires a numeric value."
+        exit 1
+    fi
+
+    # 2. Check if $2 is a number (using a Regular Expression)
+    if [[ ! "$2" =~ ^[0-9]+$ ]]; then
+        echo "Error: '$2' is not a valid number."
+        exit 1
+    fi
+
+    size=$2
+    echo "Setting size to $size"
+else 
+    echo "Error: Invalid argument. Use -s <size> to specify the size of the database."
+    exit 1
+fi
+
+
+git submodule update --init --recursive
+
+
+cd ./tpch-kit/dbgen
+make
+./dbgen -s $2 -f
+cd ../..
+
+sleep 1
+

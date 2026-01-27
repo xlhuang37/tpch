@@ -1177,7 +1177,7 @@ def execute_query_sync(
             tracer_thread = threading.Thread(
                 target=profile_events_tracer_thread,
                 args=(url, query_id, query_trace_period_ms, profile_traces, 
-                      traces_lock, req_start_ns, tracer_stop_event),
+                      traces_lock, t0_ns, tracer_stop_event),
                 daemon=True,
             )
             tracer_thread.start()

@@ -1,0 +1,14 @@
+Statistics for schedule: 001_tpch_test_all_rate8_len300_s123
+Total completed queries: 0
+Total dropped queries: 1
+============================================================
+
+DROPPED QUERIES
+----------------------------------------
+  np_greedy_58: 1
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  np_greedy_58:
+    Dropped:  1

@@ -1,7 +1,7 @@
 CREATE RESOURCE cpu (MASTER THREAD, WORKER THREAD);
 
-CREATE WORKLOAD all SETTINGS max_concurrent_threads=120;
+CREATE WORKLOAD all SETTINGS max_concurrent_threads=60;
 
-CREATE WORKLOAD SpeedUpOne IN all SETTINGS weight = 1;
+CREATE WORKLOAD SpeedUpOne IN all SETTINGS weight = 10;
 
 CREATE WORKLOAD SpeedUpTwo IN all SETTINGS weight = 1;

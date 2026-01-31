@@ -35,4 +35,4 @@ ORDER BY
     l_returnflag,
     l_linestatus
 SETTINGS
-    workload = 'SpeedUpOne';
+    workload = 'SpeedUpOne', min_bytes_to_use_direct_io = 1;

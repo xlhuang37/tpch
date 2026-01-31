@@ -1,2 +1,0 @@
-timestamp_ms,ContextLock,IOBufferAllocBytes,IOBufferAllocs,InitialQuery,InterfaceHTTPReceiveBytes,NetworkReceiveBytes,NetworkReceiveElapsedMicroseconds,Query,RWLockAcquiredReadLocks,SchedulerNodeUpdate,SelectQuery,SharedPartsLocks
-13431.47,23,2097278,2,1,286,286,4,1,1,1,1,2

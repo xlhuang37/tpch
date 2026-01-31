@@ -1,2 +1,0 @@
-timestamp_ms,ContextLock,IOBufferAllocBytes,IOBufferAllocs,InitialQuery,QueriesWithSubqueries,Query,RWLockAcquiredReadLocks,SchedulerNodeUpdate,SelectQueriesWithSubqueries,SelectQuery,SharedPartsLockHoldMicroseconds,SharedPartsLocks
-55116.80,31,2097278,2,1,1,1,1,1,1,1,1,2

@@ -1,0 +1,48 @@
+Statistics for schedule: 2141
+Total completed queries: 1
+Total dropped queries: 0
+============================================================
+
+OVERALL LATENCY STATISTICS
+----------------------------------------
+  Count:    1
+  Average:  13787.3154 ms
+  Min:      13787.3154 ms
+  Max:      13787.3154 ms
+  P50:      13787.3154 ms
+  P90:      13787.3154 ms
+  P95:      13787.3154 ms
+  P99:      13787.3154 ms
+
+OVERALL WAIT TIME STATISTICS
+----------------------------------------
+  Count:    1
+  Average:  0.2460 ms
+  Min:      0.2460 ms
+  Max:      0.2460 ms
+  P50:      0.2460 ms
+  P90:      0.2460 ms
+  P95:      0.2460 ms
+  P99:      0.2460 ms
+
+PER-QUERY STATISTICS
+----------------------------------------
+
+  test2:
+    Completed: 1
+    Latency:
+      Average:  13787.3154 ms
+      Min:      13787.3154 ms
+      Max:      13787.3154 ms
+      P50:      13787.3154 ms
+      P90:      13787.3154 ms
+      P95:      13787.3154 ms
+      P99:      13787.3154 ms
+    Wait Time:
+      Average:  0.2460 ms
+      Min:      0.2460 ms
+      Max:      0.2460 ms
+      P50:      0.2460 ms
+      P90:      0.2460 ms
+      P95:      0.2460 ms
+      P99:      0.2460 ms

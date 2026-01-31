@@ -1,0 +1,20 @@
+# Sparse Speedup Profiler Run Metadata
+# Generated: 2026-01-31T21:32:04.101301
+
+[configuration]
+query_file: queries/tpch_aws_directIO/002_tpch.sql
+host: localhost
+port: 8123
+repeat: 3
+warmup: 1
+[sampling]
+sample_points: [1, 2, 4, 8, 12, 16, 20, 24, 28, 32, 40, 44, 46, 50, 55, 60]
+max_threads: 60
+sampled_speedups: [1.0, 1.9526, 4.0349, 7.8959, 10.8278, 14.026, 16.5455, 17.8785, 19.5283, 21.2123, 23.3254, 23.0547, 22.6637, 23.2454, 24.3076, 23.9574]
+sampled_runtimes: [20.3466, 10.4203, 5.0427, 2.5769, 1.8791, 1.4506, 1.2297, 1.1381, 1.0419, 0.9592, 0.8723, 0.8825, 0.8978, 0.8753, 0.837, 0.8493]
+
+[model]
+model: usl
+sigma: 0.024888
+kappa: 0.000000
+

@@ -25,4 +25,4 @@ ORDER BY
     l_returnflag,
     l_linestatus
 SETTINGS
-    SETTINGS min_bytes_to_use_direct_io = 1;
+    min_bytes_to_use_direct_io = 1;

@@ -8,4 +8,4 @@ WHERE
     AND l_discount BETWEEN 0.05 AND 0.07
     AND l_quantity < 24
 SETTINGS
-    min_bytes_to_use_direct_io = 1, max_threads = 1;
+    min_bytes_to_use_direct_io = 1, max_threads = 2;

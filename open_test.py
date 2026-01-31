@@ -1,4 +1,9 @@
 #!/usr/bin/env python3
+"""
+Usage:
+    python3 open_test.py --trace-processes "--query-trace-period-ms 1000 --trace-metrics --schedule-trace-period-ms 1000
+"""
+#!/usr/bin/env python3
 #python3 open_test.py
 from __future__ import annotations
 from typing import Optional

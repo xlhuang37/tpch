@@ -244,7 +244,7 @@ def update_workload_settings(url: str, workload: str, max_threads: int) -> bool:
         True if successful, False otherwise
     """
     # SQL command to update workload settings
-    sql = f'CREATE OR REPLACE WORKLOAD "{workload}" IN `all` SETTINGS max_concurrent_threads = {max_threads}'
+    sql = f'CREATE OR REPLACE WORKLOAD "{workload}" IN `all` SETTINGS weight = {max_threads}'
     
     try:
         req = urllib.request.Request(url, data=sql.encode('utf-8'), method='POST')
@@ -307,10 +307,10 @@ def scheduler_thread(
             # Update ClickHouse for each workload that changed
             for workload, max_threads in allocation.items():
                 if last_allocation.get(workload) != max_threads:
-                    print(f"[Scheduler] Updating '{workload}': max_concurrent_threads={max_threads} "
+                    print(f"[Scheduler] Updating '{workload}': weight={max_threads} "
                           f"(running={workload_counts.get(workload, 0)})")
                     if update_workload_settings(url, workload, max_threads):
-                        print(f"[Scheduler] Updated '{workload}': max_concurrent_threads={max_threads} "
+                        print(f"[Scheduler] Updated '{workload}': weight={max_threads} "
                               f"(running={workload_counts.get(workload, 0)})")
             
             last_allocation = allocation

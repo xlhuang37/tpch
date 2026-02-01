@@ -87,8 +87,8 @@ NONPARALLEL_SPEEDUP.extend([1.9136] * (120 - len(NONPARALLEL_SPEEDUP)))
 # Dictionary mapping workload names to their speedup curves
 # Workload name = speedup curve name
 SPEEDUP_CURVES: Dict[str, List[float]] = {
-    "parallel": PARALLEL_SPEEDUP,
-    "nonparallel": NONPARALLEL_SPEEDUP,
+    "SpeedUpOne": PARALLEL_SPEEDUP,
+    "SpeedUpTwo": NONPARALLEL_SPEEDUP,
 }
 
 # Default total cores to distribute

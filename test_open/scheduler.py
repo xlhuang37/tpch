@@ -93,7 +93,7 @@ SPEEDUP_CURVES: Dict[str, List[float]] = {
 
 # Default total cores to distribute
 DEFAULT_TOTAL_CORES = 60
-DEFAULT_CORE_TO_THREAD_RATIO = 2
+# DEFAULT_CORE_TO_THREAD_RATIO = 2
 
 # =============================================================================
 # Workload Tracker (Thread-Safe)
@@ -222,7 +222,7 @@ def compute_thread_allocation(
         allocated = c['allocated']
         if allocated < 1:
             allocated = 1
-        result[c['workload']] = allocated * DEFAULT_CORE_TO_THREAD_RATIO
+        result[c['workload']] = allocated
     
     return result
 

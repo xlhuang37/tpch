@@ -30,6 +30,9 @@ from .metrics_tracing import (
 )
 from .query_execution import producer_thread, consumer_thread
 from .utils import read_schedule_csv, load_query
+from .scheduler import (
+    WorkloadTracker, scheduler_thread, DEFAULT_TOTAL_CORES
+)
 
 
 async def run_schedule(
@@ -46,6 +49,9 @@ async def run_schedule(
     trace_metrics: bool = False,
     continue_upon_drop: bool = False,
     pause_seconds: float = 10.0,
+    enable_scheduler: bool = False,
+    scheduler_interval_ms: int = 500,
+    total_cores: int = DEFAULT_TOTAL_CORES,
 ) -> None:
     """Run a single schedule and save results using producer/consumer threads."""
     schedule_name = os.path.splitext(os.path.basename(schedule_path))[0]
@@ -53,6 +59,8 @@ async def run_schedule(
     print(f"Running schedule: {schedule_path}")
     print(f"Schedule trace period: {schedule_trace_period_ms}ms, Query trace period: {query_trace_period_ms}ms")
     print(f"Pause on failure: {pause_seconds}s")
+    if enable_scheduler:
+        print(f"Scheduler: enabled (interval={scheduler_interval_ms}ms, cores={total_cores})")
     print(f"{'='*60}\n")
     
     # Record pre-run system state (CPU/memory usage to detect interference)
@@ -86,6 +94,9 @@ async def run_schedule(
     dropped_records: List[DroppedRecord] = []
     query_profile_traces: Dict[str, List[QueryProfileTrace]] = {}  # query_id -> traces
     records_lock = threading.Lock()
+    
+    # Workload tracker for scheduler (shared between consumer and scheduler)
+    workload_tracker = WorkloadTracker() if enable_scheduler else None
     
     # Priority queue for producer/consumer communication
     priority_queue: PriorityQueue = PriorityQueue()
@@ -146,20 +157,36 @@ async def run_schedule(
         args=(priority_queue, url, t0_ns, latency_records, dropped_records, 
               records_lock, pause_seconds, max_concurrency, stop_event,
               producer_done_event, termination_event, trace_processes, 
-              query_trace_period_ms, query_profile_traces),
+              query_trace_period_ms, query_profile_traces, workload_tracker),
         name="consumer"
     )
+    
+    # Create scheduler thread (optional)
+    scheduler = None
+    if enable_scheduler and workload_tracker:
+        scheduler = threading.Thread(
+            target=scheduler_thread,
+            args=(url, workload_tracker, scheduler_interval_ms, total_cores, stop_event),
+            name="scheduler"
+        )
     
     print("Starting producer and consumer threads...")
     producer.start()
     consumer.start()
+    if scheduler:
+        scheduler.start()
     
     # Wait for threads to complete (run in executor to not block asyncio)
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, producer.join)
     await loop.run_in_executor(None, consumer.join)
     
-    print("Producer and consumer threads completed.")
+    # Stop scheduler thread (stop_event is already set by consumer when done)
+    if scheduler:
+        stop_event.set()  # Ensure scheduler stops
+        await loop.run_in_executor(None, scheduler.join)
+    
+    print("Producer, consumer, and scheduler threads completed.")
     
     # Stop the periodic collectors
     schedule_stop_event.set()
@@ -247,6 +274,12 @@ async def main():
                     help="If set to true, will not terminate the run immediately if any query is rejected by server (default: False)")
     ap.add_argument("--pause-seconds", type=float, default=10.0,
                     help="Seconds to pause on failure before checking responses and reinserting (default: 10)")
+    ap.add_argument("--enable-scheduler", action="store_true", default=False,
+                    help="Enable scheduler thread for dynamic workload settings (default: False)")
+    ap.add_argument("--scheduler-interval-ms", type=int, default=500,
+                    help="Scheduler update interval in milliseconds (default: 500)")
+    ap.add_argument("--total-cores", type=int, default=DEFAULT_TOTAL_CORES,
+                    help=f"Total cores to distribute among workloads (default: {DEFAULT_TOTAL_CORES})")
     args = ap.parse_args()
 
     # Discover all CSV files in the schedules directory
@@ -270,6 +303,10 @@ async def main():
     print(f"  Schedule trace period: {args.schedule_trace_period_ms}ms")
     print(f"  Query trace period: {args.query_trace_period_ms}ms")
     print(f"  Continue upon drop: {args.continue_upon_drop}")
+    print(f"  Scheduler enabled: {args.enable_scheduler}")
+    if args.enable_scheduler:
+        print(f"  Scheduler interval: {args.scheduler_interval_ms}ms")
+        print(f"  Total cores: {args.total_cores}")
 
     # Create output directory with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -298,6 +335,9 @@ async def main():
             trace_metrics=args.trace_metrics,
             continue_upon_drop=args.continue_upon_drop,
             pause_seconds=args.pause_seconds,
+            enable_scheduler=args.enable_scheduler,
+            scheduler_interval_ms=args.scheduler_interval_ms,
+            total_cores=args.total_cores,
         )
 
     print(f"\n{'='*60}")

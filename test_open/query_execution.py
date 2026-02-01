@@ -244,6 +244,7 @@ def consumer_thread(
     trace_processes: bool = False,
     query_trace_period_ms: int = 100,
     query_profile_traces: Optional[Dict[str, List[QueryProfileTrace]]] = None,
+    workload_tracker: Optional['WorkloadTracker'] = None,
 ) -> None:
     """
     Consumer thread: dispatches queries and handles failures.
@@ -255,6 +256,9 @@ def consumer_thread(
     
     If trace_processes is True, profile events are collected for each query
     and stored in query_profile_traces dict (keyed by query_id).
+    
+    If workload_tracker is provided, tracks running query counts per workload
+    class for the scheduler thread.
     """
     # Use a thread pool for concurrent query execution
     pool_size = max_concurrency if max_concurrency > 0 else 100
@@ -292,6 +296,10 @@ def consumer_thread(
                         error_message=str(e),
                     ))
                 completed_ids.append(entry_id)
+                
+                # Decrement workload count when query completes
+                if workload_tracker and in_flight_query.entry.workload:
+                    workload_tracker.decrement(in_flight_query.entry.workload)
         
         # Remove completed from in_flight
         for entry_id in completed_ids:
@@ -416,6 +424,10 @@ def consumer_thread(
                     break
                 continue
             
+            # Increment workload count before dispatching
+            if workload_tracker and entry.workload:
+                workload_tracker.increment(entry.workload)
+            
             # Dispatch query using thread pool
             future = executor.submit(
                 execute_query_sync,
@@ -441,6 +453,9 @@ def consumer_thread(
                     entry = in_flight_query.entry
                     arrival_ms = (entry.arrival_ns - t0_ns) / 1e6
                     dropped_records.append(DroppedRecord(arrival_ms=arrival_ms, qid=entry.event.qid))
+                    # Decrement workload count for dropped in-flight queries
+                    if workload_tracker and entry.workload:
+                        workload_tracker.decrement(entry.workload)
             # Drain remaining queue items as dropped
             while True:
                 try:

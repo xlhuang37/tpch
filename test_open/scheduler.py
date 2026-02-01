@@ -198,7 +198,7 @@ def compute_thread_allocation(
         for c in candidates:
             # k = cores per query = allocated / running
             # We use integer division similar to FairPolicy.h
-            k = c['allocated'] // c['running'] if c['running'] > 0 else 0
+            k = c['allocated'] // c['running']
             k = min(k, len(c['speedup']) - 2)  # Ensure we don't go out of bounds
             
             # Marginal speedup for adding one more core

@@ -276,7 +276,7 @@ async def main():
                     help="Seconds to pause on failure before checking responses and reinserting (default: 10)")
     ap.add_argument("--enable-scheduler", action="store_true", default=False,
                     help="Enable scheduler thread for dynamic workload settings (default: False)")
-    ap.add_argument("--scheduler-interval-ms", type=int, default=500,
+    ap.add_argument("--scheduler-interval-ms", type=int, default=1000,
                     help="Scheduler update interval in milliseconds (default: 500)")
     ap.add_argument("--total-cores", type=int, default=DEFAULT_TOTAL_CORES,
                     help=f"Total cores to distribute among workloads (default: {DEFAULT_TOTAL_CORES})")

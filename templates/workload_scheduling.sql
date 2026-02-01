@@ -5,3 +5,5 @@ CREATE WORKLOAD all SETTINGS max_concurrent_threads=60;
 CREATE WORKLOAD SpeedUpOne IN all SETTINGS weight = 10;
 
 CREATE WORKLOAD SpeedUpTwo IN all SETTINGS weight = 1;
+
+

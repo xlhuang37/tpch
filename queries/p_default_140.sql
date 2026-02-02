@@ -33,6 +33,4 @@ GROUP BY
     l_linestatus
 ORDER BY
     l_returnflag,
-    l_linestatus
-SETTINGS 
-    min_bytes_to_use_direct_io = 1;
+    l_linestatus;

@@ -82,7 +82,7 @@ def measure_speedup_sparse(
     query: str,
     sample_points: List[int],
     repeat: int,
-    warmup: int = 3,
+    warmup: int = 1,
     verbose: bool = True
 ) -> Tuple[List[int], List[float], List[float]]:
     """
@@ -96,14 +96,15 @@ def measure_speedup_sparse(
     avg_times = []
     
     # Warmup runs
-    if warmup > 0 and verbose:
-        print(f"Running {warmup} warmup iteration(s)...")
-        max_sample = max(sample_points)
-        for _ in range(warmup):
-            run_query_with_threads(host, port, query, max_sample)
+
     
     # Measure at each sample point
     for num_threads in sample_points:
+        if warmup > 0 and verbose:
+            print(f"Running {warmup} warmup iteration(s)...")
+            max_sample = max(sample_points)
+            for _ in range(warmup):
+                run_query_with_threads(host, port, query, max_sample)
         times = []
         if verbose:
             print(f"Testing with {num_threads} thread(s)...", end=" ", flush=True)
@@ -368,9 +369,9 @@ def main():
     parser.add_argument("--sample-points", "-s", type=str, 
                         default="1,2,4,8,12,16,24,32,48,64",
                         help="Comma-separated thread counts to sample (default: 1,2,4,8,12,16,24,32,48,64)")
-    parser.add_argument("--repeat", "-r", type=int, default=8,
+    parser.add_argument("--repeat", "-r", type=int, default=3,
                         help="Number of repetitions per sample point (default: 8)")
-    parser.add_argument("--warmup", "-w", type=int, default=2,
+    parser.add_argument("--warmup", "-w", type=int, default=1,
                         help="Number of warmup runs before measurement (default: 1)")
     
     # Fitting parameters
